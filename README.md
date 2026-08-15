@@ -74,6 +74,21 @@ themselves launch, same caveat as any other tool in this family (xEdit, AutoSeas
 7. Enable the output mod in your manager, placed after every mod that shipped a BOS ini it
    depends on - its emptied stand-ins need to load after the originals to take effect.
 
+### Keep your mod load order aligned with your BOS priority choices
+
+BOSPriority only resolves disagreements between `_SWAP.ini` files - it deliberately doesn't check
+whether the mod you pick as a winner is also "winning" everywhere else that matters (its plugin's
+own records, its meshes, its textures). If mod X's swap target is itself overwritten somewhere
+else in your load order - another plugin editing the same record, or another mod's loose files
+replacing X's mesh/texture at the same path - the swap can end up using something other than what
+you picked here, even though BOSPriority did exactly what you asked.
+
+In practice this is rarely an issue: BOS rules almost always target base vanilla objects broadly,
+not something another specific mod has directly overwritten. But to keep the two systems agreeing
+instead of fighting each other, place the mods that participate in a BOS conflict in your mod
+manager in roughly the same priority order you give them here - the mod you pick as the winner for
+a swap should also be the one your manager lets win everywhere else.
+
 ### Options tab
 
 - **Language**: English, Deutsch, Español, Français, Italiano, or Português (Brasil). Changing it

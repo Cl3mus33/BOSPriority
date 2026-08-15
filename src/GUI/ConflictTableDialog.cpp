@@ -20,7 +20,10 @@ ConflictTableDialog::ConflictTableDialog(wxWindow* parent, vector<SwapKey> keys)
         "variants (chanceR/S/L), is included as-is with nothing to decide. A key scoped to several "
         "BOS locations (e.g. Farmhouse04 in Falkreath vs. Riverwood) is shown as ONE row: pick "
         "which file wins and every location it covers is resolved in one go. A location the chosen "
-        "file doesn't cover keeps its own default until you pick something else, or exclude it.");
+        "file doesn't cover keeps its own default until you pick something else, or exclude it.\n\n"
+        "Tip: the mod you pick as winner here should also be the one winning in your mod manager's "
+        "own load order (its plugin, meshes, textures) - otherwise something else may quietly "
+        "override what this swap points to. See the README for details.");
     introText->Wrap(780);
     topSizer->Add(introText, 0, wxALL, 10);
 
