@@ -132,7 +132,7 @@ void LauncherWindow::log(const wxString& msg)
 void LauncherWindow::updateButtonStates()
 {
     const bool hasKeys = !m_keys.empty();
-    const bool hasConflicts = ranges::any_of(m_keys, [](const auto& k) { return k.candidates.size() > 1; });
+    const bool hasConflicts = ranges::any_of(m_keys, [](const auto& k) { return k.candidates.size() > 1 && !k.isChancePool; });
     m_manageConflictsButton->Enable(hasConflicts);
     m_generateButton->Enable(hasKeys);
 }
@@ -179,7 +179,7 @@ void LauncherWindow::onScan(wxCommandEvent& /*event*/)
     m_keys = BOSIniMerger::scan(gameDir);
     applySavedDecisions(m_keys);
 
-    const auto conflictCount = ranges::count_if(m_keys, [](const auto& k) { return k.candidates.size() > 1; });
+    const auto conflictCount = ranges::count_if(m_keys, [](const auto& k) { return k.candidates.size() > 1 && !k.isChancePool; });
     log(wxString::Format("Found %zu key(s), %lld in conflict.", m_keys.size(), conflictCount));
     updateButtonStates();
 }

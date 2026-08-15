@@ -83,7 +83,7 @@ void applyFilePriorityFallback(vector<SwapKey>& keys, const vector<string>& file
     }
 
     for (auto& swapKey : keys) {
-        if (swapKey.candidates.size() < 2) {
+        if (swapKey.candidates.size() < 2 || swapKey.isChancePool) {
             continue;
         }
 
@@ -134,7 +134,7 @@ auto runCLI(int argC, char** argV) -> int
 
     try {
         auto keys = BOSIniMerger::scan(gameDir);
-        const auto conflictCount = ranges::count_if(keys, [](const auto& k) { return k.candidates.size() > 1; });
+        const auto conflictCount = ranges::count_if(keys, [](const auto& k) { return k.candidates.size() > 1 && !k.isChancePool; });
         spdlog::info("Found {} key(s), {} in conflict.", keys.size(), conflictCount);
 
         BOSIniMerger::applyDecisions(keys, outputDir / BOS_PRIORITY_DECISIONS_FILE_NAME);

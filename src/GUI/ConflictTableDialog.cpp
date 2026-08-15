@@ -13,8 +13,9 @@ ConflictTableDialog::ConflictTableDialog(wxWindow* parent, vector<SwapKey> keys)
     auto* topSizer = new wxBoxSizer(wxVERTICAL);
 
     auto* introText = new wxStaticText(this, wxID_ANY,
-        "Only keys where two or more source files disagree are shown here - everything else is "
-        "included as-is. Pick which file wins each conflict, or exclude a key entirely.");
+        "Only real conflicts are shown here - a key with only one line, or with chance-weighted "
+        "variants (chanceR/S/L), is included as-is with nothing to decide. Pick which file wins "
+        "each remaining conflict, or exclude a key entirely.");
     introText->Wrap(720);
     topSizer->Add(introText, 0, wxALL, 10);
 
@@ -66,7 +67,7 @@ void ConflictTableDialog::rebuildTypeFilterChoices()
 {
     set<wxString> types;
     for (const auto& swapKey : m_keys) {
-        if (swapKey.candidates.size() < 2) {
+        if (swapKey.candidates.size() < 2 || swapKey.isChancePool) {
             continue;
         }
         types.insert(swapKey.recordType ? wxString(*swapKey.recordType) : wxString("Unknown"));
@@ -90,7 +91,7 @@ void ConflictTableDialog::rebuildList()
 
     for (size_t i = 0; i < m_keys.size(); ++i) {
         const auto& swapKey = m_keys[i];
-        if (swapKey.candidates.size() < 2) {
+        if (swapKey.candidates.size() < 2 || swapKey.isChancePool) {
             continue;
         }
 

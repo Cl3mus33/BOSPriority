@@ -39,6 +39,51 @@ auto firstField(const string& line) -> string
     return p == string::npos ? line : line.substr(0, p);
 }
 
+// Returns the Nth (0-indexed) pipe-delimited field of a BOS line
+// (origBaseID|swapBaseID|propertyOverrides|chance).
+auto nthField(const string& line, size_t n) -> string
+{
+    size_t start = 0;
+    for (size_t i = 0; i < n; ++i) {
+        const auto p = line.find('|', start);
+        if (p == string::npos) {
+            return {};
+        }
+        start = p + 1;
+    }
+    const auto end = line.find('|', start);
+    return end == string::npos ? line.substr(start) : line.substr(start, end - start);
+}
+
+// Mirrors BaseObjectSwapper's own Chance::Chance(const std::string&) parsing (Manager.cpp /
+// RNG.cpp in powerof3/BaseObjectSwapper): a field only affects anything if it contains the
+// substring "chance" (so "NONE" and anything else defaults to always-applies); the numeric value
+// inside the parentheses is the chance percentage. The R/S/L letter only selects which RNG BOS
+// seeds with at runtime - irrelevant here, we only need the value to tell a randomized pool apart
+// from a deterministic swap.
+auto parseChanceValue(const string& chanceField) -> float
+{
+    if (chanceField.find("chance") == string::npos) {
+        return 100.0F;
+    }
+
+    const auto openParen = chanceField.find('(');
+    const auto closeParen = chanceField.find(')');
+    if (openParen == string::npos || closeParen == string::npos || closeParen <= openParen + 1) {
+        return 100.0F;
+    }
+
+    const string inner = chanceField.substr(openParen + 1, closeParen - openParen - 1);
+    const auto comma = inner.find(',');
+    const string valueStr = comma == string::npos ? inner : inner.substr(0, comma);
+
+    try {
+        return stof(valueStr);
+    } catch (const exception&) {
+        return 100.0F;
+    }
+}
+
 auto isBosSwapIniFile(const fs::path& p) -> bool
 {
     if (StringUtil::toLowerW(p.extension().wstring()) != L".ini") {
@@ -166,9 +211,6 @@ auto BOSIniMerger::scan(const fs::path& gameDir) -> vector<SwapKey>
                 SwapKey swapKey;
                 swapKey.section = section;
                 swapKey.key = key;
-                if (const auto parsed = parseFormIdRef(key)) {
-                    swapKey.recordType = resolver.resolveType(dataDir, parsed->second, parsed->first);
-                }
                 result.push_back(std::move(swapKey));
             }
 
@@ -178,6 +220,25 @@ auto BOSIniMerger::scan(const fs::path& gameDir) -> vector<SwapKey>
 
     for (auto& swapKey : result) {
         swapKey.selectedCandidate = static_cast<int>(swapKey.candidates.size()) - 1;
+        const auto& winningLine = swapKey.candidates.back().line;
+
+        // Type comes from the swap TARGET (second field), not the key itself: for [References]
+        // entries the key names a REFR (always resolves to "REFR", not useful to filter by),
+        // while the swap target is always a base-object FormID. A single target field can list
+        // several comma-separated alternatives (BOS picks one at runtime) - the first is
+        // representative enough for classification.
+        string targetField = nthField(winningLine, 1);
+        if (const auto comma = targetField.find(','); comma != string::npos) {
+            targetField = targetField.substr(0, comma);
+        }
+        if (const auto parsed = parseFormIdRef(targetField)) {
+            swapKey.recordType = resolver.resolveType(dataDir, parsed->second, parsed->first);
+        }
+
+        if (swapKey.candidates.size() > 1) {
+            const float winningChance = parseChanceValue(nthField(winningLine, 3));
+            swapKey.isChancePool = winningChance < 100.0F;
+        }
     }
 
     return result;
@@ -193,10 +254,11 @@ auto BOSIniMerger::merge(const vector<SwapKey>& keys, const fs::path& outputFold
 
     int excludedCount = 0;
     int selectedCount = 0;
+    int expectedCount = 0;
 
     for (const auto& swapKey : keys) {
         stats.linesRead += static_cast<int>(swapKey.candidates.size());
-        if (swapKey.candidates.size() > 1 && !swapKey.excluded) {
+        if (swapKey.candidates.size() > 1 && !swapKey.isChancePool && !swapKey.excluded) {
             ++stats.keysOverridden;
         }
         for (const auto& candidate : swapKey.candidates) {
@@ -208,11 +270,6 @@ auto BOSIniMerger::merge(const vector<SwapKey>& keys, const fs::path& outputFold
             continue;
         }
 
-        if (swapKey.selectedCandidate < 0
-            || swapKey.selectedCandidate >= static_cast<int>(swapKey.candidates.size())) {
-            continue; // defensive - malformed selection, treat like excluded rather than crash
-        }
-
         size_t idx = 0;
         if (const auto it = sectionIndex.find(swapKey.section); it != sectionIndex.end()) {
             idx = it->second;
@@ -222,6 +279,23 @@ auto BOSIniMerger::merge(const vector<SwapKey>& keys, const fs::path& outputFold
             sections.push_back({swapKey.section, {}});
         }
 
+        if (swapKey.isChancePool) {
+            // Not a real conflict - BOS keeps every entry sharing this key and rolls between them
+            // at runtime, so all of them belong in the output, unchanged.
+            expectedCount += static_cast<int>(swapKey.candidates.size());
+            for (const auto& candidate : swapKey.candidates) {
+                sections[idx].second.push_back(candidate.line);
+                ++selectedCount;
+            }
+            continue;
+        }
+
+        ++expectedCount;
+        if (swapKey.selectedCandidate < 0
+            || swapKey.selectedCandidate >= static_cast<int>(swapKey.candidates.size())) {
+            continue; // defensive - malformed selection, completeness check below will catch it
+        }
+
         sections[idx].second.push_back(swapKey.candidates[swapKey.selectedCandidate].line);
         ++selectedCount;
     }
@@ -229,13 +303,14 @@ auto BOSIniMerger::merge(const vector<SwapKey>& keys, const fs::path& outputFold
     stats.filesRead = static_cast<int>(sourceFileNames.size());
     stats.linesWritten = selectedCount;
 
-    // Completeness check: every non-excluded key must have contributed exactly one line. If not,
-    // something is wrong - abort before touching any file rather than risk silently dropping a
-    // swap rule when the originals get blanked below.
-    if (selectedCount != static_cast<int>(keys.size()) - excludedCount) {
+    // Completeness check: every non-excluded key must have contributed its expected line count
+    // (one for a real conflict/non-conflict, every candidate for a chance pool). If not, something
+    // is wrong - abort before touching any file rather than risk silently dropping a swap rule
+    // when the originals get blanked below.
+    if (selectedCount != expectedCount) {
         throw runtime_error("BOSIniMerger: completeness check failed (expected "
-                             + to_string(keys.size() - excludedCount) + " line(s), got "
-                             + to_string(selectedCount) + ") - aborting without writing anything.");
+                             + to_string(expectedCount) + " line(s), got " + to_string(selectedCount)
+                             + ") - aborting without writing anything.");
     }
 
     if (dryRun) {
@@ -282,7 +357,7 @@ void BOSIniMerger::applyDecisions(vector<SwapKey>& keys, const fs::path& decisio
     }
 
     for (auto& swapKey : keys) {
-        if (swapKey.candidates.size() < 2) {
+        if (swapKey.candidates.size() < 2 || swapKey.isChancePool) {
             continue;
         }
 
@@ -310,8 +385,8 @@ void BOSIniMerger::saveDecisions(const vector<SwapKey>& keys, const fs::path& de
 {
     auto json = nlohmann::json::object();
     for (const auto& swapKey : keys) {
-        if (swapKey.candidates.size() < 2) {
-            continue; // nothing to persist for a key with only one candidate
+        if (swapKey.candidates.size() < 2 || swapKey.isChancePool) {
+            continue; // nothing to persist - not shown/editable in the conflict table
         }
 
         json[storageKey(swapKey)] = {

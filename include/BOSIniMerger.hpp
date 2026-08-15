@@ -10,21 +10,35 @@ struct SwapEntry {
     std::string line; // full raw ini line
 };
 
-/// One BOS ini key ("[section]" + the first pipe-delimited field). candidates.size() > 1 means
-/// two or more source files disagree on this key - a real conflict. candidates.size() == 1 means
-/// only one file defines it - nothing to decide, it is always included.
+/// One BOS ini key ("[section]" + the first pipe-delimited field). candidates.size() > 1 can mean
+/// two different things, matching BOS's own Manager.cpp::log_conflicts distinction:
+///  - a real conflict: several files disagree and the winning (last-loaded) line always applies
+///    (chance field absent/"NONE" or a chance of 100) - only one should end up in the output.
+///  - a chance pool: BOS itself keeps every entry with the same key in a vector and rolls between
+///    them at runtime (chanceR/chanceS/chanceL) - ALL of them belong in the output unchanged, and
+///    there is nothing to pick between (isChancePool is true, see below).
+/// candidates.size() == 1 means only one file defines it - nothing to decide either way.
 struct SwapKey {
     std::string section; // e.g. "[Forms]", "[References]", or a filtered variant
     std::string key;
-    /// 4-character record signature (STAT, TREE, MSTT, FLOR, ...) resolved via
-    /// PluginTypeResolver, or nullopt if the key doesn't reference a hex FormID~Plugin pair
-    /// (e.g. it names an EditorID instead) or the plugin/FormID couldn't be found.
+    /// 4-character record signature (STAT, TREE, MSTT, FLOR, ...) of the swap TARGET (resolved
+    /// via PluginTypeResolver from the second pipe field, which is always a base-object FormID -
+    /// unlike the key itself, which for [References] entries names a REFR, not a useful type to
+    /// filter by). nullopt if that field doesn't reference a hex FormID~Plugin pair (e.g. it
+    /// names an EditorID instead) or the plugin/FormID couldn't be found.
     std::optional<std::string> recordType;
     std::vector<SwapEntry> candidates;
-    /// Index into candidates chosen as the winner. Defaults to the last candidate (BOS's own
-    /// alphabetical-last-file-wins rule, since scan() discovers files in that same order).
+    /// True when candidates.size() > 1 but they're chance-weighted variants of the same key
+    /// (see above) rather than a real conflict - BOS's own rule: the winning (last) candidate has
+    /// a chance value below 100. Never shown in the conflict table and never reduced to a single
+    /// winner; every candidate is written to AIO_SWAP.ini.
+    bool isChancePool = false;
+    /// Index into candidates chosen as the winner (ignored when isChancePool is true). Defaults
+    /// to the last candidate (BOS's own alphabetical-last-file-wins rule, since scan() discovers
+    /// files in that same order).
     int selectedCandidate = 0;
-    /// If true, this key is dropped entirely - no line for it ends up in AIO_SWAP.ini.
+    /// If true, this key is dropped entirely - no line for it ends up in AIO_SWAP.ini. Not
+    /// offered for chance pools.
     bool excluded = false;
 };
 
@@ -44,6 +58,9 @@ struct BosMergeStats {
  * from Data\ itself, not a subfolder) and exposes every discovered key, grouped with all of its
  * candidate lines so a caller (the GUI's conflict table, or the CLI applying saved decisions) can
  * pick a winner or exclude it before generating output.
+ *
+ * Chance-weighted duplicate keys (see SwapKey::isChancePool) are recognised and passed through in
+ * full rather than treated as conflicts, matching BOS's own Manager.cpp behaviour exactly.
  *
  * merge() then writes a single AIO_SWAP.ini AND, matching AutoSeasons' own generation pattern,
  * an emptied stand-in for every original source file - once the output mod sits after every
