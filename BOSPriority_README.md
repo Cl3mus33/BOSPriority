@@ -40,7 +40,9 @@ independently parsing `modorganizer.ini`/`modlist.txt` to reconstruct a merged v
 
 Install like any other mod: MO2 as a regular mod (add it to the executables list so it launches
 through MO2's virtual file system), Vortex by extracting into a mod folder and launching from its
-dashboard.
+dashboard. The release also ships an empty `BP.ini` at the mod's root, same convention as
+AutoSeasons/PGPatcher - a plain file there so MO2 has something to recognize the folder by, since
+it otherwise holds nothing but a loose exe (no `Data\`-mirroring structure).
 
 ## ⚠️ Run it through your mod manager, not by double-clicking the exe
 
