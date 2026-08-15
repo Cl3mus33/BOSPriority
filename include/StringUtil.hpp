@@ -3,7 +3,7 @@
 #include <cwctype>
 #include <string>
 
-#define WIN32_LEAN_AND_MEAN
+// WIN32_LEAN_AND_MEAN is already set project-wide (see top-level CMakeLists.txt).
 #include <windows.h>
 
 // Minimal UTF-8 <-> UTF-16 helpers (Win32-based, no extra dependency needed for this).

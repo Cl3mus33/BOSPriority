@@ -7,3 +7,4 @@ out/
 *.suo
 CMakeUserPresets.json
 vcpkg_installed/
+*.log

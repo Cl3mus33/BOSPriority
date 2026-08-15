@@ -237,7 +237,9 @@ void ModManager::populateModsMO2(const fs::path& instanceDir, const fs::path& ou
             continue;
         }
 
-        if (fs::equivalent(curModDir, outputDir)) {
+        // fs::equivalent() requires both paths to exist - the output folder legitimately does
+        // not exist yet on a first run, in which case it trivially cannot be this mod's folder.
+        if (fs::exists(outputDir) && fs::equivalent(curModDir, outputDir)) {
             throw runtime_error("The output folder is an enabled MO2 mod - disable it first so "
                                  "BOSPriority does not scan its own previous output.");
         }
