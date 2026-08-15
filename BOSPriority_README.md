@@ -90,5 +90,5 @@ cmake --build buildRelease --config RelWithDebInfo
 
 ## License
 
-GPLv3 - see [LICENSE](LICENSE). BOSPriority reuses adapted code from AutoSeasons/PGPatcher, both
+GPLv3 - see [BOSPriority_LICENSE.txt](BOSPriority_LICENSE.txt). BOSPriority reuses adapted code from AutoSeasons/PGPatcher, both
 also GPLv3-licensed.
