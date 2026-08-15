@@ -63,7 +63,9 @@ auto nthField(const string& line, size_t n) -> string
 // from a deterministic swap.
 auto parseChanceValue(const string& chanceField) -> float
 {
-    if (chanceField.find("chance") == string::npos) {
+    string lowerField = chanceField;
+    ranges::transform(lowerField, lowerField.begin(), [](char c) { return static_cast<char>(tolower(static_cast<unsigned char>(c))); });
+    if (lowerField.find("chance") == string::npos) {
         return 100.0F;
     }
 
@@ -182,7 +184,7 @@ auto BOSIniMerger::scan(const fs::path& gameDir) -> vector<SwapKey>
             continue;
         }
 
-        const string fileName = file.filename().string();
+        const string fileName = StringUtil::utf16ToUtf8(file.filename().wstring());
         string line;
         string section;
         while (getline(f, line)) {
@@ -190,9 +192,14 @@ auto BOSIniMerger::scan(const fs::path& gameDir) -> vector<SwapKey>
             if (line.empty() || line.front() == ';') {
                 continue;
             }
-            if (line.front() == '[' && line.back() == ']') {
-                section = line;
-                continue;
+            if (line.front() == '[') {
+                // Tolerate a trailing inline comment after the closing bracket (e.g.
+                // "[References] ; note") - without this, such a line falls through to be
+                // misread as a data line under whatever section preceded it.
+                if (const auto closeBracket = line.find(']'); closeBracket != string::npos) {
+                    section = line.substr(0, closeBracket + 1);
+                    continue;
+                }
             }
             if (section.empty()) {
                 continue; // stray line before any section header
@@ -325,24 +332,61 @@ auto BOSIniMerger::merge(const vector<SwapKey>& keys, const fs::path& outputFold
 
     fs::create_directories(outputFolder);
 
-    ofstream out(outputFolder / L"AIO_SWAP.ini");
-    out << AIO_HEADER_MARKER << " - do not hand-edit, re-run the tool instead\n";
-    out << "; " << stats.filesRead << " source ini file(s) merged, " << excludedCount << " key(s) excluded\n";
-    out << "; This file is the single source of truth - every original *_SWAP.ini listed below\n";
-    out << "; has been replaced with an empty stand-in in this same output folder.\n\n";
+    // Every file is first written to a ".tmp" sibling with exceptions enabled, so a write failure
+    // (read-only folder, disk full, file locked by another program) throws instead of silently
+    // leaving a truncated/empty file. Only once every temp write has fully succeeded do we rename
+    // them all into place - so an I/O failure partway through can never leave the output folder in
+    // a state where AIO_SWAP.ini is missing/broken but the originals are already blanked, or where
+    // only some originals got blanked.
+    vector<pair<fs::path, fs::path>> pendingRenames; // temp path -> final path
 
-    for (const auto& [section, lines] : sections) {
-        out << section << "\n";
-        for (const auto& line : lines) {
-            out << line << "\n";
+    auto writeTempFile = [&](const fs::path& finalPath, const auto& writeBody) {
+        auto tempPath = finalPath;
+        tempPath += L".tmp";
+        try {
+            ofstream file(tempPath, ios::binary);
+            file.exceptions(ios::failbit | ios::badbit);
+            writeBody(file);
+            file.close();
+        } catch (const exception&) {
+            error_code ec;
+            fs::remove(tempPath, ec);
+            for (const auto& [temp, unused] : pendingRenames) {
+                fs::remove(temp, ec);
+            }
+            throw runtime_error("BOSIniMerger: failed to write " + finalPath.filename().string()
+                                 + " to the output folder - aborting without touching any original ini file.");
         }
-        out << "\n";
-    }
-    out.close();
+        pendingRenames.emplace_back(std::move(tempPath), finalPath);
+    };
+
+    writeTempFile(outputFolder / L"AIO_SWAP.ini", [&](ostream& out) {
+        out << AIO_HEADER_MARKER << " - do not hand-edit, re-run the tool instead\n";
+        out << "; " << stats.filesRead << " source ini file(s) merged, " << excludedCount << " key(s) excluded\n";
+        out << "; This file is the single source of truth - every original *_SWAP.ini listed below\n";
+        out << "; has been replaced with an empty stand-in in this same output folder.\n\n";
+
+        for (const auto& [section, lines] : sections) {
+            out << section << "\n";
+            for (const auto& line : lines) {
+                out << line << "\n";
+            }
+            out << "\n";
+        }
+    });
 
     for (const auto& name : sourceFileNames) {
-        ofstream blank(outputFolder / StringUtil::utf8ToUtf16(name));
-        blank << BLANK_MARKER << "\n";
+        writeTempFile(outputFolder / StringUtil::utf8ToUtf16(name),
+            [](ostream& out) { out << BLANK_MARKER << "\n"; });
+    }
+
+    for (const auto& [temp, final] : pendingRenames) {
+        error_code ec;
+        fs::rename(temp, final, ec);
+        if (ec) {
+            throw runtime_error("BOSIniMerger: failed to finalize " + final.filename().string()
+                                 + " in the output folder - some files may be left as .tmp; re-run the tool.");
+        }
     }
 
     return stats;
@@ -403,6 +447,13 @@ void BOSIniMerger::saveDecisions(const vector<SwapKey>& keys, const fs::path& de
     }
 
     fs::create_directories(decisionsFile.parent_path());
-    ofstream out(decisionsFile);
-    out << json.dump(2);
+    try {
+        ofstream out(decisionsFile);
+        out.exceptions(ios::failbit | ios::badbit);
+        out << json.dump(2);
+    } catch (const exception&) {
+        // Losing this file only means saved conflict decisions won't be remembered next run - not
+        // worth aborting generation over, but worth not pretending it silently succeeded either.
+        throw runtime_error("BOSIniMerger: failed to write " + decisionsFile.filename().string());
+    }
 }

@@ -282,7 +282,15 @@ auto runGUI() -> int
             CloseHandle(processInfo.hProcess);
             CloseHandle(processInfo.hThread);
         } else {
-            cerr << "Failed to restart BOSPriority for the new theme (error " << GetLastError() << ").\n";
+            const auto errorCode = GetLastError();
+            cerr << "Failed to restart BOSPriority for the new theme (error " << errorCode << ").\n";
+            // The console window is minimized during normal GUI use (see above), so cerr alone
+            // would leave a windowed user watching the app silently vanish with no explanation.
+            wxMessageBox(wxString::Format(
+                "BOSPriority couldn't restart itself to apply the new theme (error %lu). "
+                "Please relaunch it manually - your settings were already saved.",
+                errorCode),
+                "BOSPriority", wxOK | wxICON_ERROR);
         }
     }
 

@@ -316,8 +316,14 @@ void LauncherWindow::saveSettings() const
     json["uiLanguage"] = BOSLocale::getCurrentLanguage();
     json["uiTheme"] = StringUtil::utf16ToUtf8(m_theme.ToStdWstring());
 
-    ofstream out(dir / SETTINGS_FILE_NAME);
-    out << json.dump(2);
+    try {
+        ofstream out(dir / SETTINGS_FILE_NAME);
+        out.exceptions(ios::failbit | ios::badbit);
+        out << json.dump(2);
+    } catch (const exception&) {
+        // Best-effort only - losing this file just means Game/Output/language/theme won't be
+        // remembered next launch, not worth surfacing to the user over.
+    }
 }
 
 void LauncherWindow::autoScanOnLaunch()
@@ -361,9 +367,14 @@ void LauncherWindow::onManageConflicts(wxCommandEvent& /*event*/)
     }
 
     m_keys = dlg.getKeys();
-    saveDecisions();
-    log(BOSTr("log.decisionsSaved",
-        "Conflict decisions updated and saved - remembered next time you scan this output folder."));
+    try {
+        saveDecisions();
+        log(BOSTr("log.decisionsSaved",
+            "Conflict decisions updated and saved - remembered next time you scan this output folder."));
+    } catch (const exception& e) {
+        log(wxString::Format(
+            BOSTr("log.decisionsSaveFailed", "Could not save conflict decisions: %s"), e.what()));
+    }
     updateButtonStates();
 }
 

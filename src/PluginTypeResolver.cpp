@@ -20,35 +20,50 @@ auto readU32LE(const uint8_t* p) -> uint32_t
         | (static_cast<uint32_t>(p[2]) << 16U) | (static_cast<uint32_t>(p[3]) << 24U);
 }
 
-// Recursively walks a byte range containing top-level records/groups, filling formIdToType.
+// Walks a byte range containing top-level records/groups, filling formIdToType. Iterative (an
+// explicit stack of ranges still to process) rather than recursive: a GRUP only needs its 24-byte
+// header to queue up another one, so a crafted or merely corrupted plugin file could otherwise
+// nest deep enough to overflow the call stack - this is parsing arbitrary binary files from the
+// user's mod folder, not trusted input.
 // Record header (24 bytes): Signature(4) DataSize:u32LE(4) Flags:u32LE(4) FormID:u32LE(4)
 // VersionControlInfo(4, skipped) FormVersion+Unknown(4, skipped).
 // Group header (24 bytes): "GRUP"(4) GroupSize:u32LE(4, INCLUDES this header)
 // label/type/stamp(16, skipped) - payload size to recurse into = GroupSize - 24.
 void walk(const uint8_t* data, size_t size, unordered_map<uint32_t, string>& out)
 {
-    size_t offset = 0;
-    while (offset + HEADER_SIZE <= size) {
-        const uint8_t* header = data + offset;
-        string tag(reinterpret_cast<const char*>(header), 4);
+    struct Range {
+        const uint8_t* data;
+        size_t size;
+    };
+    vector<Range> pending {{data, size}};
 
-        if (tag == "GRUP") {
-            const uint32_t groupSize = readU32LE(header + 4);
-            if (groupSize < HEADER_SIZE || offset + groupSize > size) {
-                break; // malformed/truncated - stop rather than misread the rest of the file
+    while (!pending.empty()) {
+        const auto [rangeData, rangeSize] = pending.back();
+        pending.pop_back();
+
+        size_t offset = 0;
+        while (offset + HEADER_SIZE <= rangeSize) {
+            const uint8_t* header = rangeData + offset;
+            string tag(reinterpret_cast<const char*>(header), 4);
+
+            if (tag == "GRUP") {
+                const uint32_t groupSize = readU32LE(header + 4);
+                if (groupSize < HEADER_SIZE || offset + groupSize > rangeSize) {
+                    break; // malformed/truncated - stop rather than misread the rest of the file
+                }
+                pending.push_back({rangeData + offset + HEADER_SIZE, groupSize - HEADER_SIZE});
+                offset += groupSize;
+            } else {
+                const uint32_t dataSize = readU32LE(header + 4);
+                const uint32_t formId = readU32LE(header + 12);
+                if (offset + HEADER_SIZE + dataSize > rangeSize) {
+                    break; // malformed/truncated
+                }
+                if (formId != 0) {
+                    out[formId & LOCAL_FORM_ID_MASK] = tag;
+                }
+                offset += HEADER_SIZE + dataSize;
             }
-            walk(data + offset + HEADER_SIZE, groupSize - HEADER_SIZE, out);
-            offset += groupSize;
-        } else {
-            const uint32_t dataSize = readU32LE(header + 4);
-            const uint32_t formId = readU32LE(header + 12);
-            if (offset + HEADER_SIZE + dataSize > size) {
-                break; // malformed/truncated
-            }
-            if (formId != 0) {
-                out[formId & LOCAL_FORM_ID_MASK] = tag;
-            }
-            offset += HEADER_SIZE + dataSize;
         }
     }
 }
