@@ -1,4 +1,5 @@
 #include "GUI/ConflictTableDialog.hpp"
+#include "GUI/TypePriorityDialog.hpp"
 
 #include <algorithm>
 #include <set>
@@ -27,6 +28,8 @@ ConflictTableDialog::ConflictTableDialog(wxWindow* parent, vector<SwapKey> keys)
     filterSizer->Add(new wxStaticText(this, wxID_ANY, "Filter by type:"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
     m_typeFilter = new wxChoice(this, wxID_ANY);
     filterSizer->Add(m_typeFilter, 0, wxALL, 5);
+    auto* priorityButton = new wxButton(this, wxID_ANY, "Set Priority by Type...");
+    filterSizer->Add(priorityButton, 0, wxALL, 5);
     topSizer->Add(filterSizer, 0);
 
     m_listCtrl = new wxListCtrl(this, wxID_ANY, wxDefaultPosition, wxSize(-1, 260),
@@ -62,6 +65,7 @@ ConflictTableDialog::ConflictTableDialog(wxWindow* parent, vector<SwapKey> keys)
     m_typeFilter->Bind(wxEVT_CHOICE, &ConflictTableDialog::onTypeFilterChanged, this);
     m_listCtrl->Bind(wxEVT_LIST_ITEM_SELECTED, &ConflictTableDialog::onListSelectionChanged, this);
     m_excludeCheck->Bind(wxEVT_CHECKBOX, &ConflictTableDialog::onExcludeToggled, this);
+    priorityButton->Bind(wxEVT_BUTTON, &ConflictTableDialog::onSetPriorityByType, this);
 
     buildGroups();
     rebuildTypeFilterChoices();
@@ -320,6 +324,50 @@ void ConflictTableDialog::onWinnerChosen(wxCommandEvent& /*event*/)
     }
 
     m_listCtrl->SetItem(row, 3, winnerLabelFor(group));
+}
+
+void ConflictTableDialog::onSetPriorityByType(wxCommandEvent& /*event*/)
+{
+    vector<string> allFiles;
+    for (const auto& group : m_groups) {
+        for (const auto& file : group.distinctFiles) {
+            if (ranges::find(allFiles, file) == allFiles.end()) {
+                allFiles.push_back(file);
+            }
+        }
+    }
+
+    vector<wxString> types;
+    for (const auto& group : m_groups) {
+        if (ranges::find(types, group.typeLabel) == types.end()) {
+            types.push_back(group.typeLabel);
+        }
+    }
+
+    TypePriorityDialog dlg(this, allFiles, types);
+    if (dlg.ShowModal() != wxID_OK) {
+        return;
+    }
+
+    const auto& priorities = dlg.getPriorities();
+    for (auto& group : m_groups) {
+        auto it = priorities.find(group.typeLabel);
+        if (it == priorities.end()) {
+            it = priorities.find("All Types");
+        }
+        if (it == priorities.end()) {
+            continue;
+        }
+
+        for (const auto& file : it->second) {
+            if (ranges::find(group.distinctFiles, file) != group.distinctFiles.end()) {
+                applyWinnerFile(group, file);
+                break;
+            }
+        }
+    }
+
+    rebuildList();
 }
 
 auto ConflictTableDialog::getKeys() const -> const vector<SwapKey>&

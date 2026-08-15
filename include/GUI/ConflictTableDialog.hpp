@@ -45,6 +45,7 @@ private:
     void onListSelectionChanged(wxListEvent& event);
     void onExcludeToggled(wxCommandEvent& event);
     void onWinnerChosen(wxCommandEvent& event);
+    void onSetPriorityByType(wxCommandEvent& event);
 
     std::vector<SwapKey> m_keys; // full set, edited in place
     std::vector<KeyGroup> m_groups; // every real conflict, grouped by key

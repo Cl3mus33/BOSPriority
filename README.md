@@ -64,7 +64,11 @@ themselves launch, same caveat as any other tool in this family (xEdit, AutoSeas
    else overrides it.
 3. Click **Scan Mods**.
 4. If any keys conflict, **Manage Conflicts...** opens a table - filter by type, select a
-   conflict to see its candidate lines, pick a winner or check **Exclude this key**.
+   conflict to see its candidate files, pick a winner or check **Exclude this key**. A key scoped
+   to several BOS locations (e.g. the same object swapped differently per town) shows as one row -
+   picking a winning file resolves every location it covers in one go. **Set Priority by Type...**
+   lets you rank source files once (globally, or per record type) and apply that ranking to every
+   conflict at once instead of resolving them one by one.
 5. **Preview only (dry run)** logs what would be merged without writing anything.
 6. Click **Generate**.
 7. Enable the output mod in your manager, placed after every mod that shipped a BOS ini it
