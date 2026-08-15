@@ -205,7 +205,13 @@ void LauncherWindow::performScan()
     m_keys = BOSIniMerger::scan(gameDir);
     applySavedDecisions(m_keys);
 
-    log(wxString::Format("Found %zu key(s), %lld in conflict.", m_keys.size(), countConflicts(m_keys)));
+    const auto conflictCount = countConflicts(m_keys);
+    log(wxString::Format("Found %zu key(s), %lld in conflict.", m_keys.size(), conflictCount));
+    if (!m_keys.empty() && conflictCount == 0) {
+        log("No conflicts - BOS will already produce the correct result directly from these "
+            "files, nothing needs generating. Generate is still there if you just want a single "
+            "consolidated ini (e.g. to tidy up a modlist), but it's optional.");
+    }
     updateButtonStates();
     saveSettings();
 }
@@ -277,9 +283,10 @@ void LauncherWindow::autoScanOnLaunch()
     }
 
     wxMessageDialog dlg(this,
-        "Scanned automatically and found no conflicts to manage - everything is already "
-        "resolved. You can regenerate AIO_SWAP.ini if anything changed, or just close "
-        "BOSPriority.",
+        "Scanned automatically and found no conflicts - BOS will already produce the correct "
+        "result directly from these files, nothing needs generating. Generating a single "
+        "consolidated ini is still there if you want one (e.g. to tidy up a modlist), but it's "
+        "entirely optional. Close BOSPriority?",
         "Nothing to manage", wxYES_NO | wxICON_INFORMATION);
     dlg.SetYesNoLabels("Close BOSPriority", "Keep Open");
     if (dlg.ShowModal() == wxID_YES) {
