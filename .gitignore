@@ -1,0 +1,9 @@
+build/
+buildRelease/
+buildDebug/
+out/
+.vs/
+*.user
+*.suo
+CMakeUserPresets.json
+vcpkg_installed/

@@ -1,0 +1,25 @@
+{
+  "name": "bospriority",
+  "version": "0.1.0",
+  "dependencies": [
+    {
+      "name": "cli11",
+      "version>=": "2.4.2"
+    },
+    {
+      "name": "nlohmann-json",
+      "version>=": "3.11.3#1"
+    },
+    {
+      "name": "spdlog",
+      "features": [
+        "wchar"
+      ],
+      "version>=": "1.15.0#1"
+    },
+    {
+      "name": "wxwidgets",
+      "version>=": "3.3.1#1"
+    }
+  ]
+}
