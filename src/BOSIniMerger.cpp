@@ -189,6 +189,44 @@ auto storageKey(const SwapKey& swapKey) -> string
     return swapKey.section + "||" + swapKey.key;
 }
 
+// Splits a raw section string like "[Forms|FalkreathLocation]" or "[Forms|A,B]" into its prefix
+// ("Forms") and location filter tokens ("FalkreathLocation", or ["A","B"]). An unfiltered section
+// ("[Forms]", no '|') returns an empty token list.
+auto parseSectionFilter(const string& rawSection) -> pair<string, vector<string>>
+{
+    string inner = rawSection;
+    if (!inner.empty() && inner.front() == '[') {
+        inner.erase(0, 1);
+    }
+    if (!inner.empty() && inner.back() == ']') {
+        inner.pop_back();
+    }
+
+    const auto pipePos = inner.find('|');
+    if (pipePos == string::npos) {
+        return {inner, {}};
+    }
+
+    const string prefix = inner.substr(0, pipePos);
+    const string filterPart = inner.substr(pipePos + 1);
+
+    vector<string> tokens;
+    size_t start = 0;
+    while (start <= filterPart.size()) {
+        const auto comma = filterPart.find(',', start);
+        string token = comma == string::npos ? filterPart.substr(start) : filterPart.substr(start, comma - start);
+        token = trim(token);
+        if (!token.empty()) {
+            tokens.push_back(token);
+        }
+        if (comma == string::npos) {
+            break;
+        }
+        start = comma + 1;
+    }
+    return {prefix, tokens};
+}
+
 } // namespace
 
 auto BOSIniMerger::scan(const fs::path& gameDir) -> vector<SwapKey>
@@ -210,6 +248,8 @@ auto BOSIniMerger::scan(const fs::path& gameDir) -> vector<SwapKey>
         const string fileName = StringUtil::utf16ToUtf8(file.filename().wstring());
         string line;
         string section;
+        string sectionPrefix;
+        vector<string> sectionTokens; // location filter tokens after '|', empty if unfiltered
         while (getline(f, line)) {
             line = trim(line);
             if (line.empty() || line.front() == ';') {
@@ -221,6 +261,7 @@ auto BOSIniMerger::scan(const fs::path& gameDir) -> vector<SwapKey>
                 // misread as a data line under whatever section preceded it.
                 if (const auto closeBracket = line.find(']'); closeBracket != string::npos) {
                     section = line.substr(0, closeBracket + 1);
+                    tie(sectionPrefix, sectionTokens) = parseSectionFilter(section);
                     continue;
                 }
             }
@@ -229,27 +270,51 @@ auto BOSIniMerger::scan(const fs::path& gameDir) -> vector<SwapKey>
             }
 
             const string key = firstField(line);
-            const string mapKey = section + '\x1F' + key;
 
-            size_t idx = 0;
-            if (const auto it = keyIndex.find(mapKey); it != keyIndex.end()) {
-                idx = it->second;
+            // A section can list several locations at once ("[Forms|A,B]") - BOS applies the same
+            // swap if the ref is in EITHER. Comparing the raw section string verbatim would miss a
+            // real conflict against another mod's "[Forms|A]" (same location A, different list
+            // text) entirely, so each line is filed under one group PER listed location instead of
+            // one group per raw section string - an unfiltered section files under a single
+            // "no location filter" group, same as before.
+            struct Target {
+                string displaySection;
+                string mapKey;
+            };
+            vector<Target> targets;
+            if (sectionTokens.empty()) {
+                targets.push_back({section, sectionPrefix + "\x1F\x1F" + key});
             } else {
-                idx = result.size();
-                keyIndex[mapKey] = idx;
-
-                SwapKey swapKey;
-                swapKey.section = section;
-                swapKey.key = key;
-                result.push_back(std::move(swapKey));
+                for (const auto& token : sectionTokens) {
+                    string lowerToken = token;
+                    ranges::transform(lowerToken, lowerToken.begin(),
+                        [](char c) { return static_cast<char>(tolower(static_cast<unsigned char>(c))); });
+                    targets.push_back(
+                        {"[" + sectionPrefix + "|" + token + "]", sectionPrefix + "\x1F" + lowerToken + "\x1F" + key});
+                }
             }
 
-            // Skip exact duplicate lines for this key (same text, whether repeated within one
-            // file by mistake or coincidentally identical across two) - nothing to decide between
-            // two candidates that would produce the same output either way.
-            auto& candidates = result[idx].candidates;
-            if (!ranges::any_of(candidates, [&](const SwapEntry& e) { return e.line == line; })) {
-                candidates.push_back(SwapEntry {fileName, line});
+            for (const auto& target : targets) {
+                size_t idx = 0;
+                if (const auto it = keyIndex.find(target.mapKey); it != keyIndex.end()) {
+                    idx = it->second;
+                } else {
+                    idx = result.size();
+                    keyIndex[target.mapKey] = idx;
+
+                    SwapKey swapKey;
+                    swapKey.section = target.displaySection;
+                    swapKey.key = key;
+                    result.push_back(std::move(swapKey));
+                }
+
+                // Skip exact duplicate lines for this key (same text, whether repeated within one
+                // file by mistake or coincidentally identical across two) - nothing to decide
+                // between two candidates that would produce the same output either way.
+                auto& candidates = result[idx].candidates;
+                if (!ranges::any_of(candidates, [&](const SwapEntry& e) { return e.line == line; })) {
+                    candidates.push_back(SwapEntry {fileName, line});
+                }
             }
         }
     }

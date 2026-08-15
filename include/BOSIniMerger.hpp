@@ -90,6 +90,12 @@ struct BosMergeStats {
  * scan() ignores any file that is itself a previous BOSPriority output (empty, or starting with
  * one of this tool's own marker comments) so re-scanning after a generate doesn't pick up its own
  * blanked stand-ins or AIO_SWAP.ini as if they were new source mods.
+ *
+ * A BOS section can restrict a rule to specific locations ("[Forms|A,B]" applies if the ref is in
+ * A or B). scan() explodes a multi-location section into one group per listed location rather
+ * than grouping by the raw section text, so a rule scoped to "[Forms|A,B]" in one file correctly
+ * conflicts with another file's "[Forms|A]" for the same key - comparing the raw strings verbatim
+ * would miss that real overlap entirely.
  */
 class BOSIniMerger {
 public:
