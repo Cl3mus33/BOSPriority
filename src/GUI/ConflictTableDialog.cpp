@@ -1,12 +1,14 @@
 #include "GUI/ConflictTableDialog.hpp"
 
+#include <algorithm>
 #include <set>
+#include <unordered_map>
 #include <wx/radiobut.h>
 
 using namespace std;
 
 ConflictTableDialog::ConflictTableDialog(wxWindow* parent, vector<SwapKey> keys)
-    : wxDialog(parent, wxID_ANY, "Manage BOS Conflicts", wxDefaultPosition, wxSize(760, 620),
+    : wxDialog(parent, wxID_ANY, "Manage BOS Conflicts", wxDefaultPosition, wxSize(820, 640),
                wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
     , m_keys(std::move(keys))
 {
@@ -14,9 +16,11 @@ ConflictTableDialog::ConflictTableDialog(wxWindow* parent, vector<SwapKey> keys)
 
     auto* introText = new wxStaticText(this, wxID_ANY,
         "Only real conflicts are shown here - a key with only one line, or with chance-weighted "
-        "variants (chanceR/S/L), is included as-is with nothing to decide. Pick which file wins "
-        "each remaining conflict, or exclude a key entirely.");
-    introText->Wrap(720);
+        "variants (chanceR/S/L), is included as-is with nothing to decide. A key scoped to several "
+        "BOS locations (e.g. Farmhouse04 in Falkreath vs. Riverwood) is shown as ONE row: pick "
+        "which file wins and every location it covers is resolved in one go. A location the chosen "
+        "file doesn't cover keeps its own default until you pick something else, or exclude it.");
+    introText->Wrap(780);
     topSizer->Add(introText, 0, wxALL, 10);
 
     auto* filterSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -28,15 +32,9 @@ ConflictTableDialog::ConflictTableDialog(wxWindow* parent, vector<SwapKey> keys)
     m_listCtrl = new wxListCtrl(this, wxID_ANY, wxDefaultPosition, wxSize(-1, 260),
                                  wxLC_REPORT | wxLC_SINGLE_SEL);
     m_listCtrl->InsertColumn(0, "Type", wxLIST_FORMAT_LEFT, 90);
-    m_listCtrl->InsertColumn(1, "Key", wxLIST_FORMAT_LEFT, 150);
-    // Two rows can show the same Key text but be entirely unrelated conflicts - e.g. a
-    // location-filtered BOS section like "[Forms|FalkreathLocation]" vs.
-    // "[Forms|RiverwoodLocation]" for the same key name. Shown as its own column (rather than
-    // folded into Key) so it's obvious at a glance which rows are actually the same decision and
-    // which just happen to share a key name.
-    m_listCtrl->InsertColumn(2, "Section", wxLIST_FORMAT_LEFT, 170);
-    m_listCtrl->InsertColumn(3, "Winner", wxLIST_FORMAT_LEFT, 200);
-    m_listCtrl->InsertColumn(4, "Candidates", wxLIST_FORMAT_LEFT, 90);
+    m_listCtrl->InsertColumn(1, "Key", wxLIST_FORMAT_LEFT, 170);
+    m_listCtrl->InsertColumn(2, "Locations", wxLIST_FORMAT_LEFT, 80);
+    m_listCtrl->InsertColumn(3, "Winner", wxLIST_FORMAT_LEFT, 300);
     topSizer->Add(m_listCtrl, 1, wxALL | wxEXPAND, 10);
 
     m_detailKeyLabel = new wxStaticText(this, wxID_ANY, "Select a conflict above to resolve it.");
@@ -45,7 +43,7 @@ ConflictTableDialog::ConflictTableDialog(wxWindow* parent, vector<SwapKey> keys)
     m_detailKeyLabel->SetFont(boldFont);
     topSizer->Add(m_detailKeyLabel, 0, wxLEFT | wxRIGHT | wxTOP, 10);
 
-    m_excludeCheck = new wxCheckBox(this, wxID_ANY, "Exclude this key from AIO_SWAP.ini");
+    m_excludeCheck = new wxCheckBox(this, wxID_ANY, "Exclude this key from AIO_SWAP.ini (every location)");
     m_excludeCheck->Enable(false);
     topSizer->Add(m_excludeCheck, 0, wxALL, 10);
 
@@ -65,18 +63,54 @@ ConflictTableDialog::ConflictTableDialog(wxWindow* parent, vector<SwapKey> keys)
     m_listCtrl->Bind(wxEVT_LIST_ITEM_SELECTED, &ConflictTableDialog::onListSelectionChanged, this);
     m_excludeCheck->Bind(wxEVT_CHECKBOX, &ConflictTableDialog::onExcludeToggled, this);
 
+    buildGroups();
     rebuildTypeFilterChoices();
     rebuildList();
+}
+
+void ConflictTableDialog::buildGroups()
+{
+    unordered_map<string, size_t> keyToGroupIndex;
+
+    for (size_t i = 0; i < m_keys.size(); ++i) {
+        const auto& swapKey = m_keys[i];
+        if (!swapKey.isRealConflict()) {
+            continue;
+        }
+
+        size_t groupIdx = 0;
+        if (const auto it = keyToGroupIndex.find(swapKey.key); it != keyToGroupIndex.end()) {
+            groupIdx = it->second;
+        } else {
+            groupIdx = m_groups.size();
+            keyToGroupIndex[swapKey.key] = groupIdx;
+            m_groups.push_back(KeyGroup {swapKey.key, wxString(), {}, {}});
+        }
+
+        auto& group = m_groups[groupIdx];
+        group.memberIndices.push_back(i);
+        if (group.typeLabel.IsEmpty() && swapKey.recordType) {
+            group.typeLabel = *swapKey.recordType;
+        }
+        for (const auto& candidate : swapKey.candidates) {
+            if (ranges::find(group.distinctFiles, candidate.sourceFile) == group.distinctFiles.end()) {
+                group.distinctFiles.push_back(candidate.sourceFile);
+            }
+        }
+    }
+
+    for (auto& group : m_groups) {
+        if (group.typeLabel.IsEmpty()) {
+            group.typeLabel = "Unknown";
+        }
+    }
 }
 
 void ConflictTableDialog::rebuildTypeFilterChoices()
 {
     set<wxString> types;
-    for (const auto& swapKey : m_keys) {
-        if (!swapKey.isRealConflict()) {
-            continue;
-        }
-        types.insert(swapKey.recordType ? wxString(*swapKey.recordType) : wxString("Unknown"));
+    for (const auto& group : m_groups) {
+        types.insert(group.typeLabel);
     }
 
     m_typeFilter->Clear();
@@ -87,35 +121,48 @@ void ConflictTableDialog::rebuildTypeFilterChoices()
     m_typeFilter->SetSelection(0);
 }
 
+auto ConflictTableDialog::winnerLabelFor(const KeyGroup& group) const -> wxString
+{
+    bool anyIncluded = false;
+    set<string> winners;
+    for (const size_t idx : group.memberIndices) {
+        const auto& swapKey = m_keys[idx];
+        if (swapKey.excluded) {
+            continue;
+        }
+        anyIncluded = true;
+        winners.insert(swapKey.candidates[static_cast<size_t>(swapKey.selectedCandidate)].sourceFile);
+    }
+
+    if (!anyIncluded) {
+        return "(excluded)";
+    }
+    if (winners.size() == 1) {
+        return wxString(*winners.begin());
+    }
+    return wxString::Format("(varies by location - %zu file(s))", winners.size());
+}
+
 void ConflictTableDialog::rebuildList()
 {
     m_listCtrl->DeleteAllItems();
-    m_conflictRowToKeyIndex.clear();
+    m_rowToGroupIndex.clear();
     clearDetail();
 
     const wxString filter = m_typeFilter->GetStringSelection();
 
-    for (size_t i = 0; i < m_keys.size(); ++i) {
-        const auto& swapKey = m_keys[i];
-        if (!swapKey.isRealConflict()) {
+    for (size_t i = 0; i < m_groups.size(); ++i) {
+        const auto& group = m_groups[i];
+        if (filter != "All Types" && filter != group.typeLabel) {
             continue;
         }
 
-        const wxString typeStr = swapKey.recordType ? wxString(*swapKey.recordType) : wxString("Unknown");
-        if (filter != "All Types" && filter != typeStr) {
-            continue;
-        }
+        const long row = m_listCtrl->InsertItem(m_listCtrl->GetItemCount(), group.typeLabel);
+        m_listCtrl->SetItem(row, 1, group.key);
+        m_listCtrl->SetItem(row, 2, wxString::Format("%zu", group.memberIndices.size()));
+        m_listCtrl->SetItem(row, 3, winnerLabelFor(group));
 
-        const long row = m_listCtrl->InsertItem(m_listCtrl->GetItemCount(), typeStr);
-        m_listCtrl->SetItem(row, 1, swapKey.key);
-        m_listCtrl->SetItem(row, 2, swapKey.section);
-        const wxString winner = swapKey.excluded
-            ? wxString("(excluded)")
-            : wxString(swapKey.candidates[static_cast<size_t>(swapKey.selectedCandidate)].sourceFile);
-        m_listCtrl->SetItem(row, 3, winner);
-        m_listCtrl->SetItem(row, 4, wxString::Format("%zu", swapKey.candidates.size()));
-
-        m_conflictRowToKeyIndex.push_back(i);
+        m_rowToGroupIndex.push_back(i);
     }
 }
 
@@ -124,43 +171,93 @@ void ConflictTableDialog::clearDetail()
     m_detailKeyLabel->SetLabel("Select a conflict above to resolve it.");
     m_excludeCheck->SetValue(false);
     m_excludeCheck->Enable(false);
-    m_radioSizer->Clear(true); // destroys the previous conflict's radio buttons too
+    m_radioSizer->Clear(true); // destroys the previous group's radio buttons too
     m_radioButtons.clear();
+    m_radioButtonFiles.clear();
     m_radioPanel->Layout();
 }
 
 void ConflictTableDialog::showDetailFor(int listRow)
 {
-    if (listRow < 0 || static_cast<size_t>(listRow) >= m_conflictRowToKeyIndex.size()) {
+    if (listRow < 0 || static_cast<size_t>(listRow) >= m_rowToGroupIndex.size()) {
         clearDetail();
         return;
     }
 
-    const size_t keyIdx = m_conflictRowToKeyIndex[static_cast<size_t>(listRow)];
-    const auto& swapKey = m_keys[keyIdx];
+    const size_t groupIdx = m_rowToGroupIndex[static_cast<size_t>(listRow)];
+    const auto& group = m_groups[groupIdx];
 
-    m_detailKeyLabel->SetLabel(wxString(swapKey.section) + "  " + wxString(swapKey.key));
+    m_detailKeyLabel->SetLabel(
+        wxString(group.key) + wxString::Format("  (%zu location(s) affected)", group.memberIndices.size()));
 
+    const bool allExcluded = ranges::all_of(group.memberIndices, [&](size_t idx) { return m_keys[idx].excluded; });
     m_excludeCheck->Enable(true);
-    m_excludeCheck->SetValue(swapKey.excluded);
+    m_excludeCheck->SetValue(allExcluded);
 
     m_radioSizer->Clear(true);
     m_radioButtons.clear();
+    m_radioButtonFiles.clear();
 
-    for (size_t i = 0; i < swapKey.candidates.size(); ++i) {
-        const auto& candidate = swapKey.candidates[i];
-        const wxString label = wxString(candidate.sourceFile) + ":  " + wxString(candidate.line);
+    // A radio pre-selects only if every non-excluded location currently agrees on the same
+    // winning file - otherwise no radio is pre-selected, since there isn't yet one answer to show.
+    optional<string> unanimousWinner;
+    bool disagreement = false;
+    for (const size_t idx : group.memberIndices) {
+        const auto& swapKey = m_keys[idx];
+        if (swapKey.excluded) {
+            continue;
+        }
+        const string winner = swapKey.candidates[static_cast<size_t>(swapKey.selectedCandidate)].sourceFile;
+        if (!unanimousWinner) {
+            unanimousWinner = winner;
+        } else if (*unanimousWinner != winner) {
+            disagreement = true;
+        }
+    }
+    if (disagreement) {
+        unanimousWinner.reset();
+    }
+
+    for (size_t i = 0; i < group.distinctFiles.size(); ++i) {
+        const auto& file = group.distinctFiles[i];
+        size_t coversCount = 0;
+        for (const size_t idx : group.memberIndices) {
+            if (ranges::any_of(
+                    m_keys[idx].candidates, [&](const SwapEntry& e) { return e.sourceFile == file; })) {
+                ++coversCount;
+            }
+        }
+
+        const wxString label = wxString::Format(
+            "%s  -  wins %zu/%zu location(s) if chosen", wxString(file), coversCount, group.memberIndices.size());
         auto* radio = new wxRadioButton(m_radioPanel, wxID_ANY, label, wxDefaultPosition, wxDefaultSize,
                                          i == 0 ? wxRB_GROUP : 0);
-        radio->SetValue(static_cast<int>(i) == swapKey.selectedCandidate);
-        radio->Enable(!swapKey.excluded);
+        radio->SetValue(unanimousWinner.has_value() && *unanimousWinner == file);
+        radio->Enable(!allExcluded);
         radio->Bind(wxEVT_RADIOBUTTON, &ConflictTableDialog::onWinnerChosen, this);
         m_radioSizer->Add(radio, 0, wxALL, 3);
         m_radioButtons.push_back(radio);
+        m_radioButtonFiles.push_back(file);
     }
 
     m_radioPanel->Layout();
     Layout();
+}
+
+void ConflictTableDialog::applyWinnerFile(const KeyGroup& group, const string& winnerFile)
+{
+    for (const size_t idx : group.memberIndices) {
+        auto& swapKey = m_keys[idx];
+        for (size_t i = 0; i < swapKey.candidates.size(); ++i) {
+            if (swapKey.candidates[i].sourceFile == winnerFile) {
+                swapKey.selectedCandidate = static_cast<int>(i);
+                swapKey.excluded = false;
+                break;
+            }
+        }
+        // A location this file doesn't cover is left untouched - it keeps whatever it already
+        // had (its own last-declared-wins default, or an earlier explicit pick).
+    }
 }
 
 void ConflictTableDialog::onTypeFilterChanged(wxCommandEvent& /*event*/)
@@ -176,42 +273,42 @@ void ConflictTableDialog::onListSelectionChanged(wxListEvent& event)
 void ConflictTableDialog::onExcludeToggled(wxCommandEvent& /*event*/)
 {
     const long row = m_listCtrl->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
-    if (row < 0 || static_cast<size_t>(row) >= m_conflictRowToKeyIndex.size()) {
+    if (row < 0 || static_cast<size_t>(row) >= m_rowToGroupIndex.size()) {
         return;
     }
 
-    const size_t keyIdx = m_conflictRowToKeyIndex[static_cast<size_t>(row)];
-    m_keys[keyIdx].excluded = m_excludeCheck->GetValue();
-
-    for (auto* radio : m_radioButtons) {
-        radio->Enable(!m_keys[keyIdx].excluded);
+    const size_t groupIdx = m_rowToGroupIndex[static_cast<size_t>(row)];
+    const auto& group = m_groups[groupIdx];
+    const bool excluded = m_excludeCheck->GetValue();
+    for (const size_t idx : group.memberIndices) {
+        m_keys[idx].excluded = excluded;
     }
 
-    const wxString winner = m_keys[keyIdx].excluded
-        ? wxString("(excluded)")
-        : wxString(m_keys[keyIdx].candidates[static_cast<size_t>(m_keys[keyIdx].selectedCandidate)].sourceFile);
-    m_listCtrl->SetItem(row, 3, winner);
+    for (auto* radio : m_radioButtons) {
+        radio->Enable(!excluded);
+    }
+
+    m_listCtrl->SetItem(row, 3, winnerLabelFor(group));
 }
 
 void ConflictTableDialog::onWinnerChosen(wxCommandEvent& /*event*/)
 {
     const long row = m_listCtrl->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
-    if (row < 0 || static_cast<size_t>(row) >= m_conflictRowToKeyIndex.size()) {
+    if (row < 0 || static_cast<size_t>(row) >= m_rowToGroupIndex.size()) {
         return;
     }
 
-    const size_t keyIdx = m_conflictRowToKeyIndex[static_cast<size_t>(row)];
+    const size_t groupIdx = m_rowToGroupIndex[static_cast<size_t>(row)];
+    const auto& group = m_groups[groupIdx];
 
     for (size_t i = 0; i < m_radioButtons.size(); ++i) {
         if (m_radioButtons[i]->GetValue()) {
-            m_keys[keyIdx].selectedCandidate = static_cast<int>(i);
+            applyWinnerFile(group, m_radioButtonFiles[i]);
             break;
         }
     }
 
-    const auto& swapKey = m_keys[keyIdx];
-    const wxString winner = swapKey.candidates[static_cast<size_t>(swapKey.selectedCandidate)].sourceFile;
-    m_listCtrl->SetItem(row, 3, winner);
+    m_listCtrl->SetItem(row, 3, winnerLabelFor(group));
 }
 
 auto ConflictTableDialog::getKeys() const -> const vector<SwapKey>&
