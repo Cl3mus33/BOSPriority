@@ -1,10 +1,16 @@
 #include "GUI/LauncherWindow.hpp"
 #include "BOSIniMerger.hpp"
 #include "GUI/ConflictTableDialog.hpp"
+#include "StringUtil.hpp"
+
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <array>
 #include <exception>
+#include <fstream>
 #include <wx/dirdlg.h>
+#include <windows.h>
 
 using namespace std;
 namespace fs = std::filesystem;
@@ -16,6 +22,7 @@ constexpr int ID_SCAN = wxID_HIGHEST + 12;
 constexpr int ID_MANAGE_CONFLICTS = wxID_HIGHEST + 13;
 constexpr int ID_GENERATE = wxID_HIGHEST + 14;
 
+constexpr const wchar_t* SETTINGS_FILE_NAME = L"BOSPriority_settings.json";
 constexpr int BORDER_SIZE = 5;
 
 const wxColour ACCENT_DARK(27, 94, 32); // header banner background
@@ -30,6 +37,21 @@ auto makeSectionLabel(wxWindow* parent, const wxString& text) -> wxStaticText*
     label->SetFont(font);
     label->SetForegroundColour(ACCENT);
     return label;
+}
+
+// Same "settings file next to the exe" convention as AutoSeasons' AutoSeasons_config.json.
+auto getExecutableDir() -> fs::path
+{
+    array<wchar_t, MAX_PATH> buffer {};
+    if (GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size())) == 0) {
+        return {};
+    }
+    return fs::path(buffer.data()).parent_path();
+}
+
+auto countConflicts(const vector<SwapKey>& keys) -> ptrdiff_t
+{
+    return ranges::count_if(keys, [](const auto& k) { return k.candidates.size() > 1 && !k.isChancePool; });
 }
 
 } // namespace
@@ -122,6 +144,14 @@ LauncherWindow::LauncherWindow()
     log("BOSPriority reads it exactly like the game would: if launched through MO2/Vortex, that "
         "path transparently shows your merged mod view; there is no need to separately resolve "
         "where your instance or mods folders live.");
+
+    loadSettings();
+
+    // Deferred: the frame isn't shown yet at this point (Show(true) happens right after this
+    // constructor returns, in main.cpp's OnInit) - calling Close() from here directly would race
+    // with that Show() and get silently overridden. CallAfter runs once the event loop is
+    // actually pumping, after the window is up.
+    CallAfter([this] { autoScanOnLaunch(); });
 }
 
 void LauncherWindow::log(const wxString& msg)
@@ -168,6 +198,18 @@ void LauncherWindow::saveDecisions() const
     BOSIniMerger::saveDecisions(m_keys, outputDir / BOS_PRIORITY_DECISIONS_FILE_NAME);
 }
 
+void LauncherWindow::performScan()
+{
+    const fs::path gameDir(m_gamePathCtrl->GetValue().ToStdWstring());
+
+    m_keys = BOSIniMerger::scan(gameDir);
+    applySavedDecisions(m_keys);
+
+    log(wxString::Format("Found %zu key(s), %lld in conflict.", m_keys.size(), countConflicts(m_keys)));
+    updateButtonStates();
+    saveSettings();
+}
+
 void LauncherWindow::onScan(wxCommandEvent& /*event*/)
 {
     const fs::path gameDir(m_gamePathCtrl->GetValue().ToStdWstring());
@@ -176,12 +218,73 @@ void LauncherWindow::onScan(wxCommandEvent& /*event*/)
         return;
     }
 
-    m_keys = BOSIniMerger::scan(gameDir);
-    applySavedDecisions(m_keys);
+    performScan();
+}
 
-    const auto conflictCount = ranges::count_if(m_keys, [](const auto& k) { return k.candidates.size() > 1 && !k.isChancePool; });
-    log(wxString::Format("Found %zu key(s), %lld in conflict.", m_keys.size(), conflictCount));
-    updateButtonStates();
+void LauncherWindow::loadSettings()
+{
+    const auto file = getExecutableDir() / SETTINGS_FILE_NAME;
+    if (!fs::exists(file)) {
+        return;
+    }
+
+    try {
+        ifstream f(file);
+        const auto json = nlohmann::json::parse(f);
+        if (json.contains("gameDir") && json["gameDir"].is_string()) {
+            m_gamePathCtrl->SetValue(StringUtil::utf8ToUtf16(json["gameDir"].get<string>()));
+        }
+        if (json.contains("outputDir") && json["outputDir"].is_string()) {
+            m_outputPathCtrl->SetValue(StringUtil::utf8ToUtf16(json["outputDir"].get<string>()));
+        }
+    } catch (const exception&) {
+        // corrupt/unreadable settings file - just start with blank fields
+    }
+}
+
+void LauncherWindow::saveSettings() const
+{
+    const auto dir = getExecutableDir();
+    if (dir.empty()) {
+        return;
+    }
+
+    nlohmann::json json;
+    json["gameDir"] = StringUtil::utf16ToUtf8(m_gamePathCtrl->GetValue().ToStdWstring());
+    json["outputDir"] = StringUtil::utf16ToUtf8(m_outputPathCtrl->GetValue().ToStdWstring());
+
+    ofstream out(dir / SETTINGS_FILE_NAME);
+    out << json.dump(2);
+}
+
+void LauncherWindow::autoScanOnLaunch()
+{
+    const fs::path gameDir(m_gamePathCtrl->GetValue().ToStdWstring());
+    const fs::path outputDir(m_outputPathCtrl->GetValue().ToStdWstring());
+    if (gameDir.empty() || outputDir.empty()) {
+        return; // nothing remembered from a previous run - wait for the user
+    }
+
+    log("Remembered Game/Output locations from last time - scanning automatically...");
+    performScan();
+
+    if (m_keys.empty()) {
+        return; // likely a stale/misconfigured path - let the user notice and fix it themselves
+    }
+
+    if (countConflicts(m_keys) > 0) {
+        return; // there's real work to do, leave the window open on it
+    }
+
+    wxMessageDialog dlg(this,
+        "Scanned automatically and found no conflicts to manage - everything is already "
+        "resolved. You can regenerate AIO_SWAP.ini if anything changed, or just close "
+        "BOSPriority.",
+        "Nothing to manage", wxYES_NO | wxICON_INFORMATION);
+    dlg.SetYesNoLabels("Close BOSPriority", "Keep Open");
+    if (dlg.ShowModal() == wxID_YES) {
+        Close(true);
+    }
 }
 
 void LauncherWindow::onManageConflicts(wxCommandEvent& /*event*/)

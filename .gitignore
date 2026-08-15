@@ -8,3 +8,7 @@ out/
 CMakeUserPresets.json
 vcpkg_installed/
 *.log
+
+# Runtime-generated, contains local machine paths - never ship/commit these
+BOSPriority_settings.json
+BOSPriority_decisions.json
