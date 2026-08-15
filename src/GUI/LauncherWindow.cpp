@@ -21,56 +21,103 @@ constexpr int ID_MANAGE_PRIORITY = wxID_HIGHEST + 13;
 constexpr int ID_GENERATE = wxID_HIGHEST + 14;
 
 constexpr const wchar_t* PRIORITY_FILE_NAME = L"BOSPriority_priority.json";
+constexpr int BORDER_SIZE = 5;
+
+// Same accent palette/treatment as AutoSeasons (github.com/Cl3mus33/AutoSeasons), so this reads
+// as the same tool family instead of a generic, undifferentiated wx dialog.
+const wxColour ACCENT_DARK(27, 94, 32); // header banner background
+const wxColour ACCENT(56, 142, 60); // section label text
+const wxColour ACCENT_TEXT(255, 255, 255); // text on top of ACCENT_DARK
+
+auto makeSectionLabel(wxWindow* parent, const wxString& text) -> wxStaticText*
+{
+    auto* label = new wxStaticText(parent, wxID_ANY, text);
+    wxFont font = label->GetFont();
+    font.SetWeight(wxFONTWEIGHT_BOLD);
+    label->SetFont(font);
+    label->SetForegroundColour(ACCENT);
+    return label;
+}
 } // namespace
 
 LauncherWindow::LauncherWindow()
-    : wxFrame(nullptr, wxID_ANY, "BOSPriority", wxDefaultPosition, wxSize(680, 520))
+    : wxFrame(nullptr, wxID_ANY, "BOSPriority", wxDefaultPosition, wxSize(680, 560))
 {
+    auto* mainSizer = new wxBoxSizer(wxVERTICAL);
+
+    // Header banner: same identity treatment as AutoSeasons' launcher, so the two feel like part
+    // of the same toolset at a glance instead of a plain, undifferentiated settings form.
+    auto* headerPanel = new wxPanel(this);
+    headerPanel->SetBackgroundColour(ACCENT_DARK);
+    auto* headerSizer = new wxBoxSizer(wxHORIZONTAL);
+    auto* headerTitle = new wxStaticText(headerPanel, wxID_ANY, "BOSPriority");
+    wxFont headerFont = headerTitle->GetFont();
+    headerFont.SetPointSize(headerFont.GetPointSize() + 4);
+    headerFont.SetWeight(wxFONTWEIGHT_BOLD);
+    headerTitle->SetFont(headerFont);
+    headerTitle->SetForegroundColour(ACCENT_TEXT);
+    headerSizer->Add(headerTitle, 0, wxALL | wxALIGN_CENTER_VERTICAL, BORDER_SIZE * 2);
+    headerPanel->SetSizerAndFit(headerSizer);
+    mainSizer->Add(headerPanel, 0, wxEXPAND);
+
     auto* panel = new wxPanel(this);
     auto* topSizer = new wxBoxSizer(wxVERTICAL);
+
+    auto* introText = new wxStaticText(panel, wxID_ANY,
+        "Lets you set an explicit priority order for Base Object Swapper *_SWAP.ini files, "
+        "instead of relying on BOS's own alphabetical-filename rule.");
+    introText->Wrap(640);
+    topSizer->Add(introText, 0, wxALL, BORDER_SIZE * 2);
 
     auto* warning = new wxStaticText(panel, wxID_ANY,
         "If you use Mod Organizer 2 or Vortex, run BOSPriority through its tool list/dashboard, "
         "not by double-clicking the exe in Explorer - otherwise it only sees your real Data "
         "folder, not your installed mods.");
-    warning->SetForegroundColour(wxColour(180, 95, 0));
+    warning->SetForegroundColour(wxColour(180, 95, 0)); // amber - distinct from ACCENT, reads as caution
     warning->Wrap(640);
-    topSizer->Add(warning, 0, wxALL, 5);
+    topSizer->Add(warning, 0, wxLEFT | wxRIGHT | wxTOP, BORDER_SIZE * 2);
+
+    auto* gameLocationLabel = makeSectionLabel(panel, "Game Location (folder containing Data\\)");
+    topSizer->Add(gameLocationLabel, 0, wxLEFT | wxRIGHT | wxTOP, BORDER_SIZE * 2);
 
     auto* gameSizer = new wxBoxSizer(wxHORIZONTAL);
-    gameSizer->Add(new wxStaticText(panel, wxID_ANY, "Game Location (folder containing Data\\):"),
-                   0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
     m_gamePathCtrl = new wxTextCtrl(panel, wxID_ANY);
-    gameSizer->Add(m_gamePathCtrl, 1, wxALL | wxEXPAND, 5);
-    gameSizer->Add(new wxButton(panel, ID_BROWSE_GAME, "..."), 0, wxALL, 5);
-    topSizer->Add(gameSizer, 0, wxEXPAND);
+    gameSizer->Add(m_gamePathCtrl, 1, wxALL | wxEXPAND, BORDER_SIZE);
+    gameSizer->Add(new wxButton(panel, ID_BROWSE_GAME, "Browse..."), 0, wxALL, BORDER_SIZE);
+    topSizer->Add(gameSizer, 0, wxEXPAND | wxLEFT | wxRIGHT, BORDER_SIZE);
+
+    auto* outputLocationLabel = makeSectionLabel(panel, "Output Location (dedicated mod)");
+    topSizer->Add(outputLocationLabel, 0, wxLEFT | wxRIGHT | wxTOP, BORDER_SIZE * 2);
 
     auto* outSizer = new wxBoxSizer(wxHORIZONTAL);
-    outSizer->Add(new wxStaticText(panel, wxID_ANY, "Output folder (dedicated mod):"),
-                  0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
     m_outputPathCtrl = new wxTextCtrl(panel, wxID_ANY);
-    outSizer->Add(m_outputPathCtrl, 1, wxALL | wxEXPAND, 5);
-    outSizer->Add(new wxButton(panel, ID_BROWSE_OUTPUT, "..."), 0, wxALL, 5);
-    topSizer->Add(outSizer, 0, wxEXPAND);
+    outSizer->Add(m_outputPathCtrl, 1, wxALL | wxEXPAND, BORDER_SIZE);
+    outSizer->Add(new wxButton(panel, ID_BROWSE_OUTPUT, "Browse..."), 0, wxALL, BORDER_SIZE);
+    topSizer->Add(outSizer, 0, wxEXPAND | wxLEFT | wxRIGHT, BORDER_SIZE);
 
     m_dryRunCheck = new wxCheckBox(panel, wxID_ANY, "Preview only (dry run)");
-    topSizer->Add(m_dryRunCheck, 0, wxALL, 5);
+    topSizer->Add(m_dryRunCheck, 0, wxALL, BORDER_SIZE * 2);
 
     auto* actionSizer = new wxBoxSizer(wxHORIZONTAL);
-    actionSizer->Add(new wxButton(panel, ID_SCAN, "Scan Mods"), 0, wxALL, 5);
+    actionSizer->Add(new wxButton(panel, ID_SCAN, "Scan Mods"), 0, wxALL, BORDER_SIZE);
     m_managePriorityButton = new wxButton(panel, ID_MANAGE_PRIORITY, "Manage Priority...");
     m_managePriorityButton->Disable();
-    actionSizer->Add(m_managePriorityButton, 0, wxALL, 5);
+    actionSizer->Add(m_managePriorityButton, 0, wxALL, BORDER_SIZE);
     m_generateButton = new wxButton(panel, ID_GENERATE, "Generate");
     m_generateButton->Disable();
-    actionSizer->Add(m_generateButton, 0, wxALL, 5);
-    topSizer->Add(actionSizer, 0);
+    actionSizer->Add(m_generateButton, 0, wxALL, BORDER_SIZE);
+    topSizer->Add(actionSizer, 0, wxLEFT, BORDER_SIZE);
+
+    auto* logLabel = makeSectionLabel(panel, "Log");
+    topSizer->Add(logLabel, 0, wxLEFT | wxRIGHT | wxTOP, BORDER_SIZE * 2);
 
     m_logCtrl = new wxTextCtrl(panel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize,
                                 wxTE_MULTILINE | wxTE_READONLY);
-    topSizer->Add(m_logCtrl, 1, wxALL | wxEXPAND, 5);
+    topSizer->Add(m_logCtrl, 1, wxALL | wxEXPAND, BORDER_SIZE);
 
     panel->SetSizer(topSizer);
+    mainSizer->Add(panel, 1, wxEXPAND);
+    SetSizer(mainSizer);
 
     Bind(wxEVT_BUTTON, &LauncherWindow::onBrowseGame, this, ID_BROWSE_GAME);
     Bind(wxEVT_BUTTON, &LauncherWindow::onBrowseOutput, this, ID_BROWSE_OUTPUT);
