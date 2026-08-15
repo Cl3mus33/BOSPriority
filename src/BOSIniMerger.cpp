@@ -319,26 +319,35 @@ auto BOSIniMerger::scan(const fs::path& gameDir) -> vector<SwapKey>
         }
     }
 
-    for (auto& swapKey : result) {
-        swapKey.selectedCandidate = static_cast<int>(swapKey.candidates.size()) - 1;
-        const auto& winningLine = swapKey.candidates.back().line;
-
-        // Type comes from the swap TARGET (second field), not the key itself: for [References]
-        // entries the key names a REFR (always resolves to "REFR", not useful to filter by),
-        // while the swap target is always a base-object FormID. A single target field can list
-        // several comma-separated alternatives (BOS picks one at runtime) - the first is
-        // representative enough for classification.
-        string targetField = nthField(winningLine, 1);
+    // Type comes from the swap TARGET (second field), not the key itself: for [References]
+    // entries the key names a REFR (always resolves to "REFR", not useful to filter by), while
+    // the swap target is always a base-object FormID. A single target field can list several
+    // comma-separated alternatives (BOS picks one at runtime) - the first is representative
+    // enough for classification. Shared by the winning-candidate lookup below (for
+    // SwapKey::recordType) and the per-candidate lookup (for SwapEntry::targetMissing), since a
+    // candidate whose target can't be resolved at all - wrong plugin name, or an EditorID nothing
+    // defines - is exactly the same "unresolvable" case either way BOS would silently skip it.
+    auto resolveTargetType = [&](const string& line) -> optional<string> {
+        string targetField = nthField(line, 1);
         if (const auto comma = targetField.find(','); comma != string::npos) {
             targetField = targetField.substr(0, comma);
         }
         if (const auto parsed = parseFormIdRef(targetField)) {
-            swapKey.recordType = resolver.resolveType(dataDir, parsed->second, parsed->first);
-        } else {
-            // Most real-world BOS ini exports reference a bare EditorID rather than a hex FormID -
-            // the plugin that defines it isn't named here, so this falls back to a global
-            // EditorID index built across every plugin in Data (see PluginTypeResolver).
-            swapKey.recordType = resolver.resolveTypeByEditorId(dataDir, targetField);
+            return resolver.resolveType(dataDir, parsed->second, parsed->first);
+        }
+        // Most real-world BOS ini exports reference a bare EditorID rather than a hex FormID - the
+        // plugin that defines it isn't named here, so this falls back to a global EditorID index
+        // built across every plugin in Data (see PluginTypeResolver).
+        return resolver.resolveTypeByEditorId(dataDir, targetField);
+    };
+
+    for (auto& swapKey : result) {
+        swapKey.selectedCandidate = static_cast<int>(swapKey.candidates.size()) - 1;
+        const auto& winningLine = swapKey.candidates.back().line;
+
+        swapKey.recordType = resolveTargetType(winningLine);
+        for (auto& candidate : swapKey.candidates) {
+            candidate.targetMissing = !resolveTargetType(candidate.line).has_value();
         }
 
         if (swapKey.candidates.size() > 1) {

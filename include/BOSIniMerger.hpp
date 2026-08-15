@@ -9,6 +9,12 @@
 struct SwapEntry {
     std::string sourceFile; // filename only, for display
     std::string line; // full raw ini line
+    /// True when this candidate's swap TARGET couldn't be found in any plugin under Data at all -
+    /// a hex reference naming a plugin that isn't there, or an EditorID nothing defines. BOS
+    /// itself would just silently skip a swap like this at runtime (nothing to swap TO), so this
+    /// candidate can never actually win even if picked - surfaced so the user isn't left guessing
+    /// why a mod they expected to apply doesn't seem to.
+    bool targetMissing = false;
 };
 
 /// One BOS ini key ("[section]" + the first pipe-delimited field). candidates.size() > 1 can mean

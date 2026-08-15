@@ -221,15 +221,26 @@ void ConflictTableDialog::showDetailFor(int listRow)
     for (size_t i = 0; i < group.distinctFiles.size(); ++i) {
         const auto& file = group.distinctFiles[i];
         size_t coversCount = 0;
+        bool anyTargetMissing = false;
         for (const size_t idx : group.memberIndices) {
-            if (ranges::any_of(
-                    m_keys[idx].candidates, [&](const SwapEntry& e) { return e.sourceFile == file; })) {
-                ++coversCount;
+            const auto& candidates = m_keys[idx].candidates;
+            const auto it = ranges::find_if(candidates, [&](const SwapEntry& e) { return e.sourceFile == file; });
+            if (it == candidates.end()) {
+                continue;
+            }
+            ++coversCount;
+            if (it->targetMissing) {
+                anyTargetMissing = true;
             }
         }
 
-        const wxString label = wxString::Format(
+        wxString label = wxString::Format(
             "%s  -  wins %zu/%zu location(s) if chosen", wxString(file), coversCount, group.memberIndices.size());
+        if (anyTargetMissing) {
+            // BOS silently skips a swap whose target isn't defined by any active plugin - picking
+            // this file as winner wouldn't actually change anything in-game for that location.
+            label += "  [warning: swap target not found in Data - may never apply]";
+        }
         auto* radio = new wxRadioButton(m_radioPanel, wxID_ANY, label, wxDefaultPosition, wxDefaultSize,
                                          i == 0 ? wxRB_GROUP : 0);
         radio->SetValue(unanimousWinner.has_value() && *unanimousWinner == file);
