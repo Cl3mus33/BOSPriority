@@ -334,6 +334,11 @@ auto BOSIniMerger::scan(const fs::path& gameDir) -> vector<SwapKey>
         }
         if (const auto parsed = parseFormIdRef(targetField)) {
             swapKey.recordType = resolver.resolveType(dataDir, parsed->second, parsed->first);
+        } else {
+            // Most real-world BOS ini exports reference a bare EditorID rather than a hex FormID -
+            // the plugin that defines it isn't named here, so this falls back to a global
+            // EditorID index built across every plugin in Data (see PluginTypeResolver).
+            swapKey.recordType = resolver.resolveTypeByEditorId(dataDir, targetField);
         }
 
         if (swapKey.candidates.size() > 1) {

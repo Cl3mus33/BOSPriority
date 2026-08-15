@@ -63,12 +63,14 @@ find_package(CLI11 REQUIRED CONFIG)
 find_package(nlohmann_json REQUIRED CONFIG)
 find_package(spdlog REQUIRED CONFIG)
 find_package(wxWidgets REQUIRED COMPONENTS core base)
+find_package(ZLIB REQUIRED)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
     CLI11::CLI11
     nlohmann_json::nlohmann_json
     spdlog::spdlog
     ${wxWidgets_LIBRARIES}
+    ZLIB::ZLIB
 )
 target_include_directories(${PROJECT_NAME} PRIVATE ${wxWidgets_INCLUDE_DIRS})
 target_compile_definitions(${PROJECT_NAME} PRIVATE ${wxWidgets_DEFINITIONS})
