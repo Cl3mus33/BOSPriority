@@ -48,14 +48,16 @@ auto isBosSwapIniFile(const fs::path& p) -> bool
 
 auto BOSIniMerger::discoverIniFiles(const fs::path& gameDir) -> vector<fs::path>
 {
-    const auto bosDir = gameDir / L"Data" / L"SKSE" / L"Plugins" / L"BaseObjectSwapper";
+    // BOS reads *_SWAP.ini directly from Data\ itself, not a subfolder (confirmed against the
+    // BOS xEdit export scripts, which default their save dialog to DataPath).
+    const auto dataDir = gameDir / L"Data";
 
     vector<fs::path> found;
-    if (!fs::exists(bosDir) || !fs::is_directory(bosDir)) {
+    if (!fs::exists(dataDir) || !fs::is_directory(dataDir)) {
         return found;
     }
 
-    for (const auto& entry : fs::directory_iterator(bosDir)) {
+    for (const auto& entry : fs::directory_iterator(dataDir)) {
         if (entry.is_regular_file() && isBosSwapIniFile(entry.path())) {
             found.push_back(entry.path());
         }

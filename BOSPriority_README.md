@@ -6,14 +6,14 @@ A standalone tool for Skyrim Special Edition that lets you set an explicit prior
 
 ## What it does
 
-BOS merges every `Data\SKSE\Plugins\BaseObjectSwapper\*_SWAP.ini` in your load order itself, at
-runtime - but when two files disagree about the same swap, the winner is whichever filename sorts
-last alphabetically. That's rarely what you actually want.
+BOS merges every `Data\*_SWAP.ini` in your load order itself, at runtime - but when two files
+disagree about the same swap, the winner is whichever filename sorts last alphabetically. That's
+rarely what you actually want.
 
 Point BOSPriority at your **Game Location** (the folder containing `Data\` - same thing AutoSeasons
 asks for) and it will:
 
-- Scan for every `*_SWAP.ini` under `Data\SKSE\Plugins\BaseObjectSwapper`.
+- Scan for every `*_SWAP.ini` directly under `Data\`.
 - Let you reorder those files explicitly (same idea as
   [AutoSeasons](https://github.com/Cl3mus33/AutoSeasons)'s "Manage Season Mod Conflicts" screen,
   applied to BOS files instead of `Data/Seasons` declarations).

@@ -28,8 +28,9 @@ struct BosMergeStats {
  */
 class BOSIniMerger {
 public:
-    /// Lists every `*_SWAP.ini` under `<gameDir>/Data/SKSE/Plugins/BaseObjectSwapper`, sorted
-    /// alphabetically (BOS's own default order, used as the default priority order too).
+    /// Lists every `*_SWAP.ini` directly under `<gameDir>/Data` (BOS reads them from Data\
+    /// itself, not a subfolder), sorted alphabetically (BOS's own default order, used as the
+    /// default priority order too).
     [[nodiscard]] static auto discoverIniFiles(const std::filesystem::path& gameDir)
         -> std::vector<std::filesystem::path>;
 
