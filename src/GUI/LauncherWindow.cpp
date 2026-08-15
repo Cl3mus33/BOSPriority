@@ -1,9 +1,11 @@
 #include "GUI/LauncherWindow.hpp"
 #include "BOSIniMerger.hpp"
 #include "GUI/PriorityListDialog.hpp"
+#include "StringUtil.hpp"
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <exception>
 #include <fstream>
 #include <wx/dirdlg.h>
@@ -27,10 +29,17 @@ LauncherWindow::LauncherWindow()
     auto* panel = new wxPanel(this);
     auto* topSizer = new wxBoxSizer(wxVERTICAL);
 
+    auto* warning = new wxStaticText(panel, wxID_ANY,
+        "If you use Mod Organizer 2 or Vortex, run BOSPriority through its tool list/dashboard, "
+        "not by double-clicking the exe in Explorer - otherwise it only sees your real Data "
+        "folder, not your installed mods.");
+    warning->SetForegroundColour(wxColour(180, 95, 0));
+    warning->Wrap(640);
+    topSizer->Add(warning, 0, wxALL, 5);
+
     auto* gameSizer = new wxBoxSizer(wxHORIZONTAL);
-    gameSizer->Add(
-        new wxStaticText(panel, wxID_ANY, "MO2 instance / Vortex staging / Data folder:"),
-        0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    gameSizer->Add(new wxStaticText(panel, wxID_ANY, "Game Location (folder containing Data\\):"),
+                   0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
     m_gamePathCtrl = new wxTextCtrl(panel, wxID_ANY);
     gameSizer->Add(m_gamePathCtrl, 1, wxALL | wxEXPAND, 5);
     gameSizer->Add(new wxButton(panel, ID_BROWSE_GAME, "..."), 0, wxALL, 5);
@@ -69,10 +78,11 @@ LauncherWindow::LauncherWindow()
     Bind(wxEVT_BUTTON, &LauncherWindow::onManagePriority, this, ID_MANAGE_PRIORITY);
     Bind(wxEVT_BUTTON, &LauncherWindow::onGenerate, this, ID_GENERATE);
 
-    log("Point this at your MO2 instance folder (the one containing modorganizer.ini), your "
-        "Vortex staging folder, or a plain Data folder, then Scan Mods.");
-    log("Run this via your mod manager's executables list, not by double-clicking the exe - "
-        "otherwise it only sees your game's real Data folder, not your installed mods.");
+    log("Point \"Game Location\" at the folder that contains Data\\ (your Skyrim install, or "
+        "wherever your mod manager launches the game from) - not the MO2 instance folder.");
+    log("BOSPriority reads it exactly like the game would: if launched through MO2/Vortex, that "
+        "path transparently shows your merged mod view; there is no need to separately resolve "
+        "where your instance or mods folders live.");
 }
 
 void LauncherWindow::log(const wxString& msg)
@@ -82,14 +92,14 @@ void LauncherWindow::log(const wxString& msg)
 
 void LauncherWindow::updateButtonStates()
 {
-    const bool hasMods = !m_bosMods.empty();
-    m_managePriorityButton->Enable(m_bosMods.size() > 1);
-    m_generateButton->Enable(hasMods);
+    const bool hasFiles = !m_iniFiles.empty();
+    m_managePriorityButton->Enable(m_iniFiles.size() > 1);
+    m_generateButton->Enable(hasFiles);
 }
 
 void LauncherWindow::onBrowseGame(wxCommandEvent& /*event*/)
 {
-    wxDirDialog dlg(this, "Select MO2 instance / Vortex staging / Data folder", m_gamePathCtrl->GetValue());
+    wxDirDialog dlg(this, "Select Game Location (folder containing Data)", m_gamePathCtrl->GetValue());
     if (dlg.ShowModal() == wxID_OK) {
         m_gamePathCtrl->SetValue(dlg.GetPath());
     }
@@ -103,103 +113,107 @@ void LauncherWindow::onBrowseOutput(wxCommandEvent& /*event*/)
     }
 }
 
-void LauncherWindow::loadPriorityFile() const
+auto LauncherWindow::loadPriorityMap() const -> unordered_map<wstring, int>
 {
+    unordered_map<wstring, int> map;
+
     const fs::path outputDir(m_outputPathCtrl->GetValue().ToStdWstring());
     const auto priorityFile = outputDir / PRIORITY_FILE_NAME;
     if (!fs::exists(priorityFile)) {
-        return;
+        return map;
     }
 
     try {
         ifstream f(priorityFile);
         const auto json = nlohmann::json::parse(f);
-        m_modManager->loadJSON(json);
+        for (const auto& [fileName, priority] : json.items()) {
+            if (priority.is_number_integer()) {
+                map[StringUtil::utf8ToUtf16(fileName)] = priority.get<int>();
+            }
+        }
     } catch (const exception& e) {
         wxLogWarning("Could not read saved priority file: %s", e.what());
     }
+
+    return map;
 }
 
-void LauncherWindow::savePriorityFile() const
+void LauncherWindow::savePriorityMap() const
 {
-    if (!m_modManager) {
-        return;
-    }
-
     const fs::path outputDir(m_outputPathCtrl->GetValue().ToStdWstring());
     if (outputDir.empty()) {
         return;
     }
 
+    auto json = nlohmann::json::object();
+    for (size_t i = 0; i < m_iniFiles.size(); ++i) {
+        json[StringUtil::utf16ToUtf8(m_iniFiles[i].filename().wstring())] = static_cast<int>(i);
+    }
+
     fs::create_directories(outputDir);
     ofstream out(outputDir / PRIORITY_FILE_NAME);
-    out << m_modManager->getJSON().dump(2);
+    out << json.dump(2);
+}
+
+void LauncherWindow::applySavedPriority(vector<fs::path>& files) const
+{
+    const auto priorityMap = loadPriorityMap();
+    if (priorityMap.empty()) {
+        return;
+    }
+
+    ranges::stable_sort(files, [&](const fs::path& a, const fs::path& b) {
+        const auto aIt = priorityMap.find(a.filename().wstring());
+        const auto bIt = priorityMap.find(b.filename().wstring());
+        const bool aHas = aIt != priorityMap.end();
+        const bool bHas = bIt != priorityMap.end();
+        if (aHas != bHas) {
+            return bHas; // files without a saved priority default to the bottom (lowest applied)
+        }
+        if (aHas) {
+            return aIt->second < bIt->second;
+        }
+        return false; // keep relative (alphabetical) order among files with no saved priority
+    });
 }
 
 void LauncherWindow::onScan(wxCommandEvent& /*event*/)
 {
     const fs::path gameDir(m_gamePathCtrl->GetValue().ToStdWstring());
-    const fs::path outputDir(m_outputPathCtrl->GetValue().ToStdWstring());
-
     if (gameDir.empty()) {
-        log("Pick a game/instance folder first.");
+        log("Pick a Game Location first.");
         return;
     }
 
-    m_modManager.reset();
-    m_bosMods.clear();
+    m_iniFiles = BOSIniMerger::discoverIniFiles(gameDir);
+    applySavedPriority(m_iniFiles);
 
-    try {
-        if (ModManager::isValidMO2InstanceDir(gameDir)) {
-            log("Detected a Mod Organizer 2 instance.");
-            m_modManager = make_unique<ModManager>(ModManager::ModManagerType::MODORGANIZER2);
-            m_modManager->populateModsMO2(gameDir, outputDir);
-        } else if (fs::exists(gameDir / "vortex.deployment.json")) {
-            log("Detected a Vortex deployment manifest.");
-            m_modManager = make_unique<ModManager>(ModManager::ModManagerType::VORTEX);
-            m_modManager->populateModsVortex(gameDir);
-        } else {
-            log("No modorganizer.ini or vortex.deployment.json found here - treating this as a "
-                "plain merged Data folder. There is only one copy of each file in that case, so "
-                "there is no cross-mod priority to manage.");
-            m_modManager = make_unique<ModManager>(ModManager::ModManagerType::NONE);
-        }
-    } catch (const exception& e) {
-        log(wxString("Error scanning mods: ") + e.what());
-        m_modManager.reset();
-        updateButtonStates();
-        return;
+    log(wxString::Format("Found %zu BaseObjectSwapper ini file(s).", m_iniFiles.size()));
+    for (const auto& file : m_iniFiles) {
+        log(wxString("  - ") + file.filename().wstring());
     }
-
-    loadPriorityFile();
-    m_bosMods = m_modManager->getBosModsInApplyOrder();
-    log(wxString::Format("Found %zu mod(s) shipping a BaseObjectSwapper ini.", m_bosMods.size()));
     updateButtonStates();
 }
 
 void LauncherWindow::onManagePriority(wxCommandEvent& /*event*/)
 {
-    if (!m_modManager || m_bosMods.size() < 2) {
+    if (m_iniFiles.size() < 2) {
         return;
     }
 
-    PriorityListDialog dlg(this, m_bosMods);
+    PriorityListDialog dlg(this, m_iniFiles);
     if (dlg.ShowModal() != wxID_OK) {
         return;
     }
 
-    m_bosMods = dlg.getOrderedMods();
-    for (size_t i = 0; i < m_bosMods.size(); ++i) {
-        m_bosMods[i]->priority = static_cast<int>(i);
-    }
-
-    savePriorityFile();
-    log("Priority order updated and saved - it will be remembered next time you scan this output folder.");
+    m_iniFiles = dlg.getOrderedFiles();
+    savePriorityMap();
+    log("Priority order updated and saved - it will be remembered next time you scan.");
 }
 
 void LauncherWindow::onGenerate(wxCommandEvent& /*event*/)
 {
-    if (m_bosMods.empty()) {
+    if (m_iniFiles.empty()) {
         log("Nothing to merge - Scan Mods first.");
         return;
     }
@@ -210,14 +224,8 @@ void LauncherWindow::onGenerate(wxCommandEvent& /*event*/)
         return;
     }
 
-    vector<BosMergeSourceMod> sources;
-    sources.reserve(m_bosMods.size());
-    for (const auto& mod : m_bosMods) {
-        sources.push_back(BosMergeSourceMod{mod->name, mod->folder});
-    }
-
     const bool dryRun = m_dryRunCheck->GetValue();
-    const auto stats = BOSIniMerger::merge(sources, outputDir, dryRun);
+    const auto stats = BOSIniMerger::merge(m_iniFiles, outputDir, dryRun);
 
     log(wxString::Format(
         "%s: %d file(s) read, %d line(s) read, %d key(s) overridden by priority, %d line(s) %s.",

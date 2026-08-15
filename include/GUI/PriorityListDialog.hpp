@@ -1,22 +1,19 @@
 #pragma once
 
-#include "ModManager.hpp"
-
-#include <memory>
+#include <filesystem>
 #include <vector>
 #include <wx/wx.h>
 
-/// Lets the user reorder the mods that ship a BOS ini. Mirrors the "Manage Season Mod Conflicts"
-/// dialog in AutoSeasons - same idea (explicit user priority instead of an implicit rule),
-/// applied to Base Object Swapper ini files instead of Data/Seasons declarations.
+/// Lets the user reorder the discovered *_SWAP.ini files. Same idea as AutoSeasons' "Manage
+/// Season Mod Conflicts" dialog - explicit user priority instead of an implicit rule - applied
+/// per ini file (BOS's own unit of conflict resolution) rather than per mod.
 class PriorityListDialog : public wxDialog {
 public:
-    PriorityListDialog(wxWindow* parent, std::vector<std::shared_ptr<ModManager::Mod>> mods);
+    PriorityListDialog(wxWindow* parent, std::vector<std::filesystem::path> filesInApplyOrder);
 
-    /// Mods in the final chosen order: index 0 is applied first (loses conflicts), the last
-    /// entry is applied last (wins). Caller is responsible for turning this into `priority`
-    /// values on the underlying Mod objects.
-    [[nodiscard]] auto getOrderedMods() const -> const std::vector<std::shared_ptr<ModManager::Mod>>&;
+    /// Files in the final chosen order: index 0 is applied first (loses conflicts), the last
+    /// entry is applied last (wins).
+    [[nodiscard]] auto getOrderedFiles() const -> const std::vector<std::filesystem::path>&;
 
 private:
     void refreshListBox();
@@ -24,5 +21,5 @@ private:
     void onMoveDown(wxCommandEvent& event);
 
     wxListBox* m_listBox = nullptr;
-    std::vector<std::shared_ptr<ModManager::Mod>> m_mods;
+    std::vector<std::filesystem::path> m_files;
 };

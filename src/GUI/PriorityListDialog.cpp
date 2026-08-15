@@ -7,16 +7,16 @@ constexpr int ID_MOVE_UP = wxID_HIGHEST + 1;
 constexpr int ID_MOVE_DOWN = wxID_HIGHEST + 2;
 } // namespace
 
-PriorityListDialog::PriorityListDialog(wxWindow* parent, vector<shared_ptr<ModManager::Mod>> mods)
+PriorityListDialog::PriorityListDialog(wxWindow* parent, vector<std::filesystem::path> filesInApplyOrder)
     : wxDialog(parent, wxID_ANY, "Manage BOS Ini Priority", wxDefaultPosition, wxSize(480, 420),
                wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
-    , m_mods(std::move(mods))
+    , m_files(std::move(filesInApplyOrder))
 {
     auto* topSizer = new wxBoxSizer(wxVERTICAL);
 
     auto* label = new wxStaticText(this, wxID_ANY,
         "Top = applied first (loses conflicts). Bottom = applied last (wins).\n"
-        "This overrides BOS's own alphabetical-filename rule for these mods.");
+        "This overrides BOS's own alphabetical-filename rule.");
     topSizer->Add(label, 0, wxALL | wxEXPAND, 10);
 
     auto* listSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -52,11 +52,11 @@ void PriorityListDialog::refreshListBox()
     const auto prevSelection = m_listBox->GetSelection();
 
     m_listBox->Clear();
-    for (const auto& mod : m_mods) {
-        m_listBox->Append(wxString(mod->name));
+    for (const auto& file : m_files) {
+        m_listBox->Append(wxString(file.filename().wstring()));
     }
 
-    if (prevSelection != wxNOT_FOUND && prevSelection < static_cast<int>(m_mods.size())) {
+    if (prevSelection != wxNOT_FOUND && prevSelection < static_cast<int>(m_files.size())) {
         m_listBox->SetSelection(prevSelection);
     }
 }
@@ -68,7 +68,7 @@ void PriorityListDialog::onMoveUp(wxCommandEvent& /*event*/)
         return;
     }
 
-    std::swap(m_mods[static_cast<size_t>(sel)], m_mods[static_cast<size_t>(sel) - 1]);
+    std::swap(m_files[static_cast<size_t>(sel)], m_files[static_cast<size_t>(sel) - 1]);
     refreshListBox();
     m_listBox->SetSelection(sel - 1);
 }
@@ -76,16 +76,16 @@ void PriorityListDialog::onMoveUp(wxCommandEvent& /*event*/)
 void PriorityListDialog::onMoveDown(wxCommandEvent& /*event*/)
 {
     const auto sel = m_listBox->GetSelection();
-    if (sel == wxNOT_FOUND || sel + 1 >= static_cast<int>(m_mods.size())) {
+    if (sel == wxNOT_FOUND || sel + 1 >= static_cast<int>(m_files.size())) {
         return;
     }
 
-    std::swap(m_mods[static_cast<size_t>(sel)], m_mods[static_cast<size_t>(sel) + 1]);
+    std::swap(m_files[static_cast<size_t>(sel)], m_files[static_cast<size_t>(sel) + 1]);
     refreshListBox();
     m_listBox->SetSelection(sel + 1);
 }
 
-auto PriorityListDialog::getOrderedMods() const -> const vector<shared_ptr<ModManager::Mod>>&
+auto PriorityListDialog::getOrderedFiles() const -> const vector<std::filesystem::path>&
 {
-    return m_mods;
+    return m_files;
 }

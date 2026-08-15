@@ -1,6 +1,5 @@
 #include "BOSIniMerger.hpp"
 #include "GUI/LauncherWindow.hpp"
-#include "ModManager.hpp"
 #include "StringUtil.hpp"
 
 #include <CLI/CLI.hpp>
@@ -8,12 +7,14 @@
 #include <spdlog/spdlog.h>
 #include <wx/wx.h>
 
+#include <algorithm>
 #include <array>
 #include <exception>
 #include <filesystem>
 #include <iostream>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include <windows.h>
 
@@ -42,7 +43,7 @@ void pauseBeforeExit()
 struct BOSPriorityCLIArgs {
     string gameDir;
     string outputDir;
-    vector<string> modPriority; // lowest applied priority first
+    vector<string> filePriority; // filenames, lowest applied priority first
     bool dryRun = false;
     int verbosity = 0;
 };
@@ -50,43 +51,61 @@ struct BOSPriorityCLIArgs {
 void addArguments(CLI::App& app, BOSPriorityCLIArgs& args)
 {
     app.add_flag("-v", args.verbosity, "Verbosity level -v for DEBUG data or -vv for TRACE data");
-    app.add_option(
-           "game-dir", args.gameDir, "MO2 instance folder, Vortex staging folder, or a plain Data folder")
+    app.add_option("game-dir", args.gameDir,
+                   "Game location: the folder containing Data\\ (not an MO2 instance folder). "
+                   "When launched through MO2/Vortex's tool list, this transparently shows your "
+                   "merged mod view.")
         ->required();
     app.add_option("output", args.outputDir, "Output directory")->default_str("BOSPriority_Output");
-    app.add_option("--mod-priority", args.modPriority,
-                   "Mod names, comma-separated, lowest priority first - when two mods both ship a "
-                   "BOS ini touching the same key, the one listed later wins. Mods not listed keep "
-                   "their mod-manager order, below every named mod.")
+    app.add_option("--file-priority", args.filePriority,
+                   "*_SWAP.ini filenames, comma-separated, lowest priority first - when two files "
+                   "touch the same key, the one listed later wins. Files not listed keep BOS's "
+                   "own alphabetical order, below every named file.")
         ->delimiter(',');
     app.add_flag("--dry-run", args.dryRun,
                  "Scan and log what would be merged, but write nothing to the output directory")
         ->default_val(false);
 }
 
-auto buildModManager(const fs::path& gameDir, const fs::path& outputDir) -> unique_ptr<ModManager>
+void applyFilePriority(vector<fs::path>& files, const vector<string>& filePriority)
 {
-    if (ModManager::isValidMO2InstanceDir(gameDir)) {
-        spdlog::info("Detected a Mod Organizer 2 instance.");
-        auto mm = make_unique<ModManager>(ModManager::ModManagerType::MODORGANIZER2);
-        mm->populateModsMO2(gameDir, outputDir);
-        return mm;
+    if (filePriority.empty()) {
+        return;
     }
-    if (fs::exists(gameDir / "vortex.deployment.json")) {
-        spdlog::info("Detected a Vortex deployment manifest.");
-        auto mm = make_unique<ModManager>(ModManager::ModManagerType::VORTEX);
-        mm->populateModsVortex(gameDir);
-        return mm;
+
+    unordered_map<wstring, int> priorityMap;
+    for (size_t i = 0; i < filePriority.size(); ++i) {
+        priorityMap[StringUtil::utf8ToUtf16(filePriority[i])] = static_cast<int>(i);
     }
-    spdlog::info("No modorganizer.ini or vortex.deployment.json found - treating this as a plain "
-                 "merged Data folder.");
-    return make_unique<ModManager>(ModManager::ModManagerType::NONE);
+
+    for (const auto& [name, priority] : priorityMap) {
+        (void)priority;
+        const bool found = ranges::any_of(
+            files, [&](const fs::path& f) { return f.filename().wstring() == name; });
+        if (!found) {
+            spdlog::warn("--file-priority named a file that was not found: {}", StringUtil::utf16ToUtf8(name));
+        }
+    }
+
+    ranges::stable_sort(files, [&](const fs::path& a, const fs::path& b) {
+        const auto aIt = priorityMap.find(a.filename().wstring());
+        const auto bIt = priorityMap.find(b.filename().wstring());
+        const bool aHas = aIt != priorityMap.end();
+        const bool bHas = bIt != priorityMap.end();
+        if (aHas != bHas) {
+            return bHas;
+        }
+        if (aHas) {
+            return aIt->second < bIt->second;
+        }
+        return false;
+    });
 }
 
 auto runCLI(int argC, char** argV) -> int
 {
     BOSPriorityCLIArgs args;
-    CLI::App app {"BOSPriority: lets you set explicit mod priority for Base Object Swapper ini files"};
+    CLI::App app {"BOSPriority: lets you set explicit priority for Base Object Swapper ini files"};
     addArguments(app, args);
 
     try {
@@ -114,28 +133,12 @@ auto runCLI(int argC, char** argV) -> int
     const fs::path outputDir = StringUtil::utf8ToUtf16(args.outputDir);
 
     try {
-        auto modManager = buildModManager(gameDir, outputDir);
+        auto files = BOSIniMerger::discoverIniFiles(gameDir);
+        spdlog::info("Found {} BaseObjectSwapper ini file(s).", files.size());
 
-        for (size_t i = 0; i < args.modPriority.size(); ++i) {
-            const auto modName = StringUtil::utf8ToUtf16(args.modPriority[i]);
-            if (auto mod = modManager->getMod(modName)) {
-                mod->priority = static_cast<int>(i);
-            } else {
-                spdlog::warn("--mod-priority named a mod that was not found or is not enabled: {}",
-                             args.modPriority[i]);
-            }
-        }
+        applyFilePriority(files, args.filePriority);
 
-        const auto bosMods = modManager->getBosModsInApplyOrder();
-        spdlog::info("Found {} mod(s) shipping a BaseObjectSwapper ini.", bosMods.size());
-
-        vector<BosMergeSourceMod> sources;
-        sources.reserve(bosMods.size());
-        for (const auto& mod : bosMods) {
-            sources.push_back(BosMergeSourceMod {mod->name, mod->folder});
-        }
-
-        const auto stats = BOSIniMerger::merge(sources, outputDir, args.dryRun);
+        const auto stats = BOSIniMerger::merge(files, outputDir, args.dryRun);
         spdlog::info("{}: {} file(s) read, {} line(s) read, {} key(s) overridden by priority, {} line(s) {}.",
                      args.dryRun ? "Preview" : "Done", stats.filesRead, stats.linesRead, stats.keysOverridden,
                      stats.linesWritten, args.dryRun ? "would be written" : "written");

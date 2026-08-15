@@ -1,8 +1,7 @@
 #pragma once
 
-#include "ModManager.hpp"
-
-#include <memory>
+#include <filesystem>
+#include <unordered_map>
 #include <vector>
 #include <wx/wx.h>
 
@@ -18,8 +17,9 @@ private:
     void onGenerate(wxCommandEvent& event);
 
     void log(const wxString& msg);
-    void loadPriorityFile() const;
-    void savePriorityFile() const;
+    [[nodiscard]] auto loadPriorityMap() const -> std::unordered_map<std::wstring, int>;
+    void savePriorityMap() const;
+    void applySavedPriority(std::vector<std::filesystem::path>& files) const;
     void updateButtonStates();
 
     wxTextCtrl* m_gamePathCtrl = nullptr;
@@ -29,7 +29,6 @@ private:
     wxButton* m_generateButton = nullptr;
     wxTextCtrl* m_logCtrl = nullptr;
 
-    std::unique_ptr<ModManager> m_modManager;
     /// Result of the last scan, current chosen order (lowest applied priority first).
-    std::vector<std::shared_ptr<ModManager::Mod>> m_bosMods;
+    std::vector<std::filesystem::path> m_iniFiles;
 };
