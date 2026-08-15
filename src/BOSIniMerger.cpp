@@ -214,7 +214,13 @@ auto BOSIniMerger::scan(const fs::path& gameDir) -> vector<SwapKey>
                 result.push_back(std::move(swapKey));
             }
 
-            result[idx].candidates.push_back(SwapEntry {fileName, line});
+            // Skip exact duplicate lines for this key (same text, whether repeated within one
+            // file by mistake or coincidentally identical across two) - nothing to decide between
+            // two candidates that would produce the same output either way.
+            auto& candidates = result[idx].candidates;
+            if (!ranges::any_of(candidates, [&](const SwapEntry& e) { return e.line == line; })) {
+                candidates.push_back(SwapEntry {fileName, line});
+            }
         }
     }
 
