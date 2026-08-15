@@ -177,5 +177,13 @@ auto main(int argc, char** argv) -> int
         return runCLI(argc, argv);
     }
 
+    // GUI launch: the exe is a console-subsystem build (so CLI/automation output and the
+    // pause-before-exit prompt work), but that means a console window pops up alongside the GUI
+    // window every time - minimize it instead of leaving it sitting in front. Still reachable
+    // from the taskbar if ever needed; CLI mode above never touches this, console stays visible.
+    if (HWND consoleWindow = GetConsoleWindow(); consoleWindow != nullptr) {
+        ShowWindow(consoleWindow, SW_MINIMIZE);
+    }
+
     return wxEntry(argc, argv);
 }
