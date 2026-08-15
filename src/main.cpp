@@ -43,7 +43,8 @@ void pauseBeforeExit()
 struct BOSPriorityCLIArgs {
     string gameDir;
     string outputDir;
-    vector<string> filePriority; // filenames, lowest applied priority first
+    vector<string> filePriority; // filenames, lowest applied priority first - fallback only,
+                                  // used for conflicting keys with no saved per-key decision
     bool dryRun = false;
     int verbosity = 0;
 };
@@ -58,48 +59,47 @@ void addArguments(CLI::App& app, BOSPriorityCLIArgs& args)
         ->required();
     app.add_option("output", args.outputDir, "Output directory")->default_str("BOSPriority_Output");
     app.add_option("--file-priority", args.filePriority,
-                   "*_SWAP.ini filenames, comma-separated, lowest priority first - when two files "
-                   "touch the same key, the one listed later wins. Files not listed keep BOS's "
-                   "own alphabetical order, below every named file.")
+                   "*_SWAP.ini filenames, comma-separated, lowest priority first - fallback used "
+                   "only for conflicting keys that have no saved decision (see the GUI's Manage "
+                   "Conflicts table, saved as BOSPriority_decisions.json in the output folder). "
+                   "Per-key winner/exclude edits are GUI-only, same as AutoSeasons' own "
+                   "config-file-only per-type overrides.")
         ->delimiter(',');
     app.add_flag("--dry-run", args.dryRun,
                  "Scan and log what would be merged, but write nothing to the output directory")
         ->default_val(false);
 }
 
-void applyFilePriority(vector<fs::path>& files, const vector<string>& filePriority)
+// Applied only to keys with no saved per-key decision (BOSIniMerger::applyDecisions already ran).
+void applyFilePriorityFallback(vector<SwapKey>& keys, const vector<string>& filePriority)
 {
     if (filePriority.empty()) {
         return;
     }
 
-    unordered_map<wstring, int> priorityMap;
+    unordered_map<string, int> priorityMap;
     for (size_t i = 0; i < filePriority.size(); ++i) {
-        priorityMap[StringUtil::utf8ToUtf16(filePriority[i])] = static_cast<int>(i);
+        priorityMap[filePriority[i]] = static_cast<int>(i);
     }
 
-    for (const auto& [name, priority] : priorityMap) {
-        (void)priority;
-        const bool found = ranges::any_of(
-            files, [&](const fs::path& f) { return f.filename().wstring() == name; });
-        if (!found) {
-            spdlog::warn("--file-priority named a file that was not found: {}", StringUtil::utf16ToUtf8(name));
+    for (auto& swapKey : keys) {
+        if (swapKey.candidates.size() < 2) {
+            continue;
+        }
+
+        int bestPriority = -1;
+        int bestIndex = swapKey.selectedCandidate;
+        for (size_t i = 0; i < swapKey.candidates.size(); ++i) {
+            const auto it = priorityMap.find(swapKey.candidates[i].sourceFile);
+            if (it != priorityMap.end() && it->second > bestPriority) {
+                bestPriority = it->second;
+                bestIndex = static_cast<int>(i);
+            }
+        }
+        if (bestPriority >= 0) {
+            swapKey.selectedCandidate = bestIndex;
         }
     }
-
-    ranges::stable_sort(files, [&](const fs::path& a, const fs::path& b) {
-        const auto aIt = priorityMap.find(a.filename().wstring());
-        const auto bIt = priorityMap.find(b.filename().wstring());
-        const bool aHas = aIt != priorityMap.end();
-        const bool bHas = bIt != priorityMap.end();
-        if (aHas != bHas) {
-            return bHas;
-        }
-        if (aHas) {
-            return aIt->second < bIt->second;
-        }
-        return false;
-    });
 }
 
 auto runCLI(int argC, char** argV) -> int
@@ -133,12 +133,14 @@ auto runCLI(int argC, char** argV) -> int
     const fs::path outputDir = StringUtil::utf8ToUtf16(args.outputDir);
 
     try {
-        auto files = BOSIniMerger::discoverIniFiles(gameDir);
-        spdlog::info("Found {} BaseObjectSwapper ini file(s).", files.size());
+        auto keys = BOSIniMerger::scan(gameDir);
+        const auto conflictCount = ranges::count_if(keys, [](const auto& k) { return k.candidates.size() > 1; });
+        spdlog::info("Found {} key(s), {} in conflict.", keys.size(), conflictCount);
 
-        applyFilePriority(files, args.filePriority);
+        BOSIniMerger::applyDecisions(keys, outputDir / BOS_PRIORITY_DECISIONS_FILE_NAME);
+        applyFilePriorityFallback(keys, args.filePriority);
 
-        const auto stats = BOSIniMerger::merge(files, outputDir, args.dryRun);
+        const auto stats = BOSIniMerger::merge(keys, outputDir, args.dryRun);
         spdlog::info("{}: {} file(s) read, {} line(s) read, {} key(s) overridden by priority, {} line(s) {}.",
                      args.dryRun ? "Preview" : "Done", stats.filesRead, stats.linesRead, stats.keysOverridden,
                      stats.linesWritten, args.dryRun ? "would be written" : "written");

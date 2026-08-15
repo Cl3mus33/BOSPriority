@@ -1,13 +1,9 @@
 #include "GUI/LauncherWindow.hpp"
 #include "BOSIniMerger.hpp"
-#include "GUI/PriorityListDialog.hpp"
-#include "StringUtil.hpp"
-
-#include <nlohmann/json.hpp>
+#include "GUI/ConflictTableDialog.hpp"
 
 #include <algorithm>
 #include <exception>
-#include <fstream>
 #include <wx/dirdlg.h>
 
 using namespace std;
@@ -17,14 +13,11 @@ namespace {
 constexpr int ID_BROWSE_GAME = wxID_HIGHEST + 10;
 constexpr int ID_BROWSE_OUTPUT = wxID_HIGHEST + 11;
 constexpr int ID_SCAN = wxID_HIGHEST + 12;
-constexpr int ID_MANAGE_PRIORITY = wxID_HIGHEST + 13;
+constexpr int ID_MANAGE_CONFLICTS = wxID_HIGHEST + 13;
 constexpr int ID_GENERATE = wxID_HIGHEST + 14;
 
-constexpr const wchar_t* PRIORITY_FILE_NAME = L"BOSPriority_priority.json";
 constexpr int BORDER_SIZE = 5;
 
-// Same accent palette/treatment as AutoSeasons (github.com/Cl3mus33/AutoSeasons), so this reads
-// as the same tool family instead of a generic, undifferentiated wx dialog.
 const wxColour ACCENT_DARK(27, 94, 32); // header banner background
 const wxColour ACCENT(56, 142, 60); // section label text
 const wxColour ACCENT_TEXT(255, 255, 255); // text on top of ACCENT_DARK
@@ -38,6 +31,7 @@ auto makeSectionLabel(wxWindow* parent, const wxString& text) -> wxStaticText*
     label->SetForegroundColour(ACCENT);
     return label;
 }
+
 } // namespace
 
 LauncherWindow::LauncherWindow()
@@ -45,8 +39,6 @@ LauncherWindow::LauncherWindow()
 {
     auto* mainSizer = new wxBoxSizer(wxVERTICAL);
 
-    // Header banner: same identity treatment as AutoSeasons' launcher, so the two feel like part
-    // of the same toolset at a glance instead of a plain, undifferentiated settings form.
     auto* headerPanel = new wxPanel(this);
     headerPanel->SetBackgroundColour(ACCENT_DARK);
     auto* headerSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -100,9 +92,9 @@ LauncherWindow::LauncherWindow()
 
     auto* actionSizer = new wxBoxSizer(wxHORIZONTAL);
     actionSizer->Add(new wxButton(panel, ID_SCAN, "Scan Mods"), 0, wxALL, BORDER_SIZE);
-    m_managePriorityButton = new wxButton(panel, ID_MANAGE_PRIORITY, "Manage Priority...");
-    m_managePriorityButton->Disable();
-    actionSizer->Add(m_managePriorityButton, 0, wxALL, BORDER_SIZE);
+    m_manageConflictsButton = new wxButton(panel, ID_MANAGE_CONFLICTS, "Manage Conflicts...");
+    m_manageConflictsButton->Disable();
+    actionSizer->Add(m_manageConflictsButton, 0, wxALL, BORDER_SIZE);
     m_generateButton = new wxButton(panel, ID_GENERATE, "Generate");
     m_generateButton->Disable();
     actionSizer->Add(m_generateButton, 0, wxALL, BORDER_SIZE);
@@ -122,7 +114,7 @@ LauncherWindow::LauncherWindow()
     Bind(wxEVT_BUTTON, &LauncherWindow::onBrowseGame, this, ID_BROWSE_GAME);
     Bind(wxEVT_BUTTON, &LauncherWindow::onBrowseOutput, this, ID_BROWSE_OUTPUT);
     Bind(wxEVT_BUTTON, &LauncherWindow::onScan, this, ID_SCAN);
-    Bind(wxEVT_BUTTON, &LauncherWindow::onManagePriority, this, ID_MANAGE_PRIORITY);
+    Bind(wxEVT_BUTTON, &LauncherWindow::onManageConflicts, this, ID_MANAGE_CONFLICTS);
     Bind(wxEVT_BUTTON, &LauncherWindow::onGenerate, this, ID_GENERATE);
 
     log("Point \"Game Location\" at the folder that contains Data\\ (your Skyrim install, or "
@@ -139,9 +131,10 @@ void LauncherWindow::log(const wxString& msg)
 
 void LauncherWindow::updateButtonStates()
 {
-    const bool hasFiles = !m_iniFiles.empty();
-    m_managePriorityButton->Enable(m_iniFiles.size() > 1);
-    m_generateButton->Enable(hasFiles);
+    const bool hasKeys = !m_keys.empty();
+    const bool hasConflicts = ranges::any_of(m_keys, [](const auto& k) { return k.candidates.size() > 1; });
+    m_manageConflictsButton->Enable(hasConflicts);
+    m_generateButton->Enable(hasKeys);
 }
 
 void LauncherWindow::onBrowseGame(wxCommandEvent& /*event*/)
@@ -160,68 +153,19 @@ void LauncherWindow::onBrowseOutput(wxCommandEvent& /*event*/)
     }
 }
 
-auto LauncherWindow::loadPriorityMap() const -> unordered_map<wstring, int>
+void LauncherWindow::applySavedDecisions(vector<SwapKey>& keys) const
 {
-    unordered_map<wstring, int> map;
-
     const fs::path outputDir(m_outputPathCtrl->GetValue().ToStdWstring());
-    const auto priorityFile = outputDir / PRIORITY_FILE_NAME;
-    if (!fs::exists(priorityFile)) {
-        return map;
-    }
-
-    try {
-        ifstream f(priorityFile);
-        const auto json = nlohmann::json::parse(f);
-        for (const auto& [fileName, priority] : json.items()) {
-            if (priority.is_number_integer()) {
-                map[StringUtil::utf8ToUtf16(fileName)] = priority.get<int>();
-            }
-        }
-    } catch (const exception& e) {
-        wxLogWarning("Could not read saved priority file: %s", e.what());
-    }
-
-    return map;
+    BOSIniMerger::applyDecisions(keys, outputDir / BOS_PRIORITY_DECISIONS_FILE_NAME);
 }
 
-void LauncherWindow::savePriorityMap() const
+void LauncherWindow::saveDecisions() const
 {
     const fs::path outputDir(m_outputPathCtrl->GetValue().ToStdWstring());
     if (outputDir.empty()) {
         return;
     }
-
-    auto json = nlohmann::json::object();
-    for (size_t i = 0; i < m_iniFiles.size(); ++i) {
-        json[StringUtil::utf16ToUtf8(m_iniFiles[i].filename().wstring())] = static_cast<int>(i);
-    }
-
-    fs::create_directories(outputDir);
-    ofstream out(outputDir / PRIORITY_FILE_NAME);
-    out << json.dump(2);
-}
-
-void LauncherWindow::applySavedPriority(vector<fs::path>& files) const
-{
-    const auto priorityMap = loadPriorityMap();
-    if (priorityMap.empty()) {
-        return;
-    }
-
-    ranges::stable_sort(files, [&](const fs::path& a, const fs::path& b) {
-        const auto aIt = priorityMap.find(a.filename().wstring());
-        const auto bIt = priorityMap.find(b.filename().wstring());
-        const bool aHas = aIt != priorityMap.end();
-        const bool bHas = bIt != priorityMap.end();
-        if (aHas != bHas) {
-            return bHas; // files without a saved priority default to the bottom (lowest applied)
-        }
-        if (aHas) {
-            return aIt->second < bIt->second;
-        }
-        return false; // keep relative (alphabetical) order among files with no saved priority
-    });
+    BOSIniMerger::saveDecisions(m_keys, outputDir / BOS_PRIORITY_DECISIONS_FILE_NAME);
 }
 
 void LauncherWindow::onScan(wxCommandEvent& /*event*/)
@@ -232,35 +176,30 @@ void LauncherWindow::onScan(wxCommandEvent& /*event*/)
         return;
     }
 
-    m_iniFiles = BOSIniMerger::discoverIniFiles(gameDir);
-    applySavedPriority(m_iniFiles);
+    m_keys = BOSIniMerger::scan(gameDir);
+    applySavedDecisions(m_keys);
 
-    log(wxString::Format("Found %zu BaseObjectSwapper ini file(s).", m_iniFiles.size()));
-    for (const auto& file : m_iniFiles) {
-        log(wxString("  - ") + file.filename().wstring());
-    }
+    const auto conflictCount = ranges::count_if(m_keys, [](const auto& k) { return k.candidates.size() > 1; });
+    log(wxString::Format("Found %zu key(s), %lld in conflict.", m_keys.size(), conflictCount));
     updateButtonStates();
 }
 
-void LauncherWindow::onManagePriority(wxCommandEvent& /*event*/)
+void LauncherWindow::onManageConflicts(wxCommandEvent& /*event*/)
 {
-    if (m_iniFiles.size() < 2) {
-        return;
-    }
-
-    PriorityListDialog dlg(this, m_iniFiles);
+    ConflictTableDialog dlg(this, m_keys);
     if (dlg.ShowModal() != wxID_OK) {
         return;
     }
 
-    m_iniFiles = dlg.getOrderedFiles();
-    savePriorityMap();
-    log("Priority order updated and saved - it will be remembered next time you scan.");
+    m_keys = dlg.getKeys();
+    saveDecisions();
+    log("Conflict decisions updated and saved - remembered next time you scan this output folder.");
+    updateButtonStates();
 }
 
 void LauncherWindow::onGenerate(wxCommandEvent& /*event*/)
 {
-    if (m_iniFiles.empty()) {
+    if (m_keys.empty()) {
         log("Nothing to merge - Scan Mods first.");
         return;
     }
@@ -272,14 +211,21 @@ void LauncherWindow::onGenerate(wxCommandEvent& /*event*/)
     }
 
     const bool dryRun = m_dryRunCheck->GetValue();
-    const auto stats = BOSIniMerger::merge(m_iniFiles, outputDir, dryRun);
 
-    log(wxString::Format(
-        "%s: %d file(s) read, %d line(s) read, %d key(s) overridden by priority, %d line(s) %s.",
-        dryRun ? "Preview" : "Done", stats.filesRead, stats.linesRead, stats.keysOverridden,
-        stats.linesWritten, dryRun ? "would be written" : "written"));
+    try {
+        const auto stats = BOSIniMerger::merge(m_keys, outputDir, dryRun);
 
-    if (!dryRun) {
-        log(wxString("Wrote ") + (outputDir / L"AIO_SWAP.ini").wstring());
+        log(wxString::Format(
+            "%s: %d file(s) read, %d line(s) read, %d key(s) overridden by priority, %d line(s) %s.",
+            dryRun ? "Preview" : "Done", stats.filesRead, stats.linesRead, stats.keysOverridden,
+            stats.linesWritten, dryRun ? "would be written" : "written"));
+
+        if (!dryRun) {
+            log(wxString("Wrote ") + (outputDir / L"AIO_SWAP.ini").wstring());
+            log("Original source ini files were replaced with empty stand-ins in this output "
+                "folder - only AIO_SWAP.ini is active now.");
+        }
+    } catch (const exception& e) {
+        log(wxString("Generation aborted: ") + e.what());
     }
 }
