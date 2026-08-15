@@ -14,13 +14,18 @@ Point BOSPriority at your **Game Location** (the folder containing `Data\` - sam
 asks for) and it will:
 
 - Scan for every `*_SWAP.ini` directly under `Data\`.
-- Let you reorder those files explicitly (same idea as
+- Show only the keys that actually **conflict** (2+ files disagree) in a table - same idea as
   [AutoSeasons](https://github.com/Cl3mus33/AutoSeasons)'s "Manage Season Mod Conflicts" screen,
-  applied to BOS files instead of `Data/Seasons` declarations).
-- Merge every matching ini into one consolidated `AIO_SWAP.ini`, resolving conflicting entries by
-  your chosen order instead of raw alphabetical filename order.
-- Remember your priority choices (saved as JSON in the output folder) so re-running later doesn't
-  ask again unless a new file shows up.
+  applied to BOS files instead of `Data/Seasons` declarations - filterable by the resolved record
+  **type** (Static, Tree, MovableStatic, ...), read directly from the plugin the swap references.
+  Everything else (no conflict) is included automatically; nothing to decide.
+- Let you pick which file wins each conflict, or **exclude** a key entirely.
+- Merge everything into one consolidated `AIO_SWAP.ini`, then replace every original source
+  `*_SWAP.ini` with an emptied stand-in in the output folder - once that output mod loads after
+  every source mod, AIO_SWAP.ini becomes the only one actually read. A completeness check runs
+  first and aborts (writing nothing) if any key wouldn't make it into the output.
+- Remember your decisions (saved as JSON in the output folder) so re-running later doesn't ask
+  again unless something new shows up.
 - Run fully offline against your files - it never touches the running game.
 
 BOSPriority only manages **existing** BOS ini files. It does not generate BOS entries from ESPs -
@@ -58,12 +63,12 @@ themselves launch, same caveat as any other tool in this family (xEdit, AutoSeas
    entry in your manager (e.g. "BOSPriority Output"), placed last in your load order so nothing
    else overrides it.
 3. Click **Scan Mods**.
-4. If more than one `*_SWAP.ini` was found, **Manage Priority...** opens a reorderable list - top
-   is applied first (loses conflicts), bottom is applied last (wins).
+4. If any keys conflict, **Manage Conflicts...** opens a table - filter by type, select a
+   conflict to see its candidate lines, pick a winner or check **Exclude this key**.
 5. **Preview only (dry run)** logs what would be merged without writing anything.
 6. Click **Generate**.
 7. Enable the output mod in your manager, placed after every mod that shipped a BOS ini it
-   depends on.
+   depends on - its emptied stand-ins need to load after the originals to take effect.
 
 ### Command-line / automation
 
@@ -71,9 +76,10 @@ themselves launch, same caveat as any other tool in this family (xEdit, AutoSeas
 BOSPriority.exe <game-dir> [output] --file-priority "ModA_SWAP.ini,ModB_SWAP.ini" [--dry-run] [-v|-vv]
 ```
 
-`game-dir` is the Game Location described above (not an MO2 instance folder). `--file-priority`
-takes `*_SWAP.ini` filenames, comma-separated, lowest priority first (later in the list wins
-conflicting keys). Files not named keep BOS's own alphabetical order, below every named file.
+`game-dir` is the Game Location described above (not an MO2 instance folder). Per-key winner/
+exclude decisions are GUI-only (saved to `BOSPriority_decisions.json` in the output folder, same
+file the CLI reads); `--file-priority` is a fallback used only for conflicts with no saved
+decision - `*_SWAP.ini` filenames, comma-separated, lowest priority first.
 
 ## Building from source
 
