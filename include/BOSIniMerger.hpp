@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -40,6 +41,23 @@ struct SwapKey {
     /// If true, this key is dropped entirely - no line for it ends up in AIO_SWAP.ini. Not
     /// offered for chance pools.
     bool excluded = false;
+
+    /// True only for an actual cross-mod disagreement: 2+ non-chance candidates from more than
+    /// one distinct source file. When 2+ non-identical, non-chance candidates all come from the
+    /// SAME file (a mod author declaring the same key twice - happens in the wild, e.g. a rolled
+    /// vs. unrolled rug variant left in by mistake), there is nothing to decide: BOS's own
+    /// line-by-line parsing already deterministically keeps whichever one is declared last in
+    /// that one file - exactly what selectedCandidate already defaults to - so it's excluded from
+    /// the conflict table just like a chance pool, just resolved differently under the hood (only
+    /// the winning line, not every candidate, ends up in the output).
+    [[nodiscard]] auto isRealConflict() const -> bool
+    {
+        if (candidates.size() < 2 || isChancePool) {
+            return false;
+        }
+        return std::ranges::any_of(
+            candidates, [&](const SwapEntry& e) { return e.sourceFile != candidates.front().sourceFile; });
+    }
 };
 
 /// Filename used to persist winner/exclude decisions in an output folder - shared between the GUI

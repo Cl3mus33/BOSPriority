@@ -28,9 +28,15 @@ ConflictTableDialog::ConflictTableDialog(wxWindow* parent, vector<SwapKey> keys)
     m_listCtrl = new wxListCtrl(this, wxID_ANY, wxDefaultPosition, wxSize(-1, 260),
                                  wxLC_REPORT | wxLC_SINGLE_SEL);
     m_listCtrl->InsertColumn(0, "Type", wxLIST_FORMAT_LEFT, 90);
-    m_listCtrl->InsertColumn(1, "Key", wxLIST_FORMAT_LEFT, 200);
-    m_listCtrl->InsertColumn(2, "Winner", wxLIST_FORMAT_LEFT, 220);
-    m_listCtrl->InsertColumn(3, "Candidates", wxLIST_FORMAT_LEFT, 90);
+    m_listCtrl->InsertColumn(1, "Key", wxLIST_FORMAT_LEFT, 150);
+    // Two rows can show the same Key text but be entirely unrelated conflicts - e.g. a
+    // location-filtered BOS section like "[Forms|FalkreathLocation]" vs.
+    // "[Forms|RiverwoodLocation]" for the same key name. Shown as its own column (rather than
+    // folded into Key) so it's obvious at a glance which rows are actually the same decision and
+    // which just happen to share a key name.
+    m_listCtrl->InsertColumn(2, "Section", wxLIST_FORMAT_LEFT, 170);
+    m_listCtrl->InsertColumn(3, "Winner", wxLIST_FORMAT_LEFT, 200);
+    m_listCtrl->InsertColumn(4, "Candidates", wxLIST_FORMAT_LEFT, 90);
     topSizer->Add(m_listCtrl, 1, wxALL | wxEXPAND, 10);
 
     m_detailKeyLabel = new wxStaticText(this, wxID_ANY, "Select a conflict above to resolve it.");
@@ -67,7 +73,7 @@ void ConflictTableDialog::rebuildTypeFilterChoices()
 {
     set<wxString> types;
     for (const auto& swapKey : m_keys) {
-        if (swapKey.candidates.size() < 2 || swapKey.isChancePool) {
+        if (!swapKey.isRealConflict()) {
             continue;
         }
         types.insert(swapKey.recordType ? wxString(*swapKey.recordType) : wxString("Unknown"));
@@ -91,7 +97,7 @@ void ConflictTableDialog::rebuildList()
 
     for (size_t i = 0; i < m_keys.size(); ++i) {
         const auto& swapKey = m_keys[i];
-        if (swapKey.candidates.size() < 2 || swapKey.isChancePool) {
+        if (!swapKey.isRealConflict()) {
             continue;
         }
 
@@ -102,11 +108,12 @@ void ConflictTableDialog::rebuildList()
 
         const long row = m_listCtrl->InsertItem(m_listCtrl->GetItemCount(), typeStr);
         m_listCtrl->SetItem(row, 1, swapKey.key);
+        m_listCtrl->SetItem(row, 2, swapKey.section);
         const wxString winner = swapKey.excluded
             ? wxString("(excluded)")
             : wxString(swapKey.candidates[static_cast<size_t>(swapKey.selectedCandidate)].sourceFile);
-        m_listCtrl->SetItem(row, 2, winner);
-        m_listCtrl->SetItem(row, 3, wxString::Format("%zu", swapKey.candidates.size()));
+        m_listCtrl->SetItem(row, 3, winner);
+        m_listCtrl->SetItem(row, 4, wxString::Format("%zu", swapKey.candidates.size()));
 
         m_conflictRowToKeyIndex.push_back(i);
     }
@@ -183,7 +190,7 @@ void ConflictTableDialog::onExcludeToggled(wxCommandEvent& /*event*/)
     const wxString winner = m_keys[keyIdx].excluded
         ? wxString("(excluded)")
         : wxString(m_keys[keyIdx].candidates[static_cast<size_t>(m_keys[keyIdx].selectedCandidate)].sourceFile);
-    m_listCtrl->SetItem(row, 2, winner);
+    m_listCtrl->SetItem(row, 3, winner);
 }
 
 void ConflictTableDialog::onWinnerChosen(wxCommandEvent& /*event*/)
@@ -204,7 +211,7 @@ void ConflictTableDialog::onWinnerChosen(wxCommandEvent& /*event*/)
 
     const auto& swapKey = m_keys[keyIdx];
     const wxString winner = swapKey.candidates[static_cast<size_t>(swapKey.selectedCandidate)].sourceFile;
-    m_listCtrl->SetItem(row, 2, winner);
+    m_listCtrl->SetItem(row, 3, winner);
 }
 
 auto ConflictTableDialog::getKeys() const -> const vector<SwapKey>&

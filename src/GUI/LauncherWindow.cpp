@@ -55,7 +55,7 @@ auto getExecutableDir() -> fs::path
 
 auto countConflicts(const vector<SwapKey>& keys) -> ptrdiff_t
 {
-    return ranges::count_if(keys, [](const auto& k) { return k.candidates.size() > 1 && !k.isChancePool; });
+    return ranges::count_if(keys, [](const auto& k) { return k.isRealConflict(); });
 }
 
 } // namespace
