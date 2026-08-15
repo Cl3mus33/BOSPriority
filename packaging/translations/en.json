@@ -1,0 +1,77 @@
+{
+  "_language": "English",
+  "launcher": {
+    "tab": {
+      "general": "General",
+      "options": "Options"
+    },
+    "intro": "Lets you set an explicit priority order for Base Object Swapper *_SWAP.ini files, instead of relying on BOS's own alphabetical-filename rule.",
+    "warning": "If you use Mod Organizer 2 or Vortex, run BOSPriority through its tool list/dashboard, not by double-clicking the exe in Explorer - otherwise it only sees your real Data folder, not your installed mods.",
+    "gameLocation": {
+      "label": "Game Location (folder containing Data\\)",
+      "dialogTitle": "Select Game Location (folder containing Data)"
+    },
+    "outputLocation": {
+      "label": "Output Location (dedicated mod)",
+      "dialogTitle": "Select output folder"
+    },
+    "dryRun": "Preview only (dry run)",
+    "scanButton": "Scan Mods",
+    "manageConflictsButton": "Manage Conflicts...",
+    "generateButton": "Generate",
+    "logLabel": "Log",
+    "browse": "Browse...",
+    "language": {
+      "label": "Language"
+    },
+    "theme": {
+      "label": "Theme",
+      "system": "System",
+      "light": "Light",
+      "dark": "Dark"
+    }
+  },
+  "log": {
+    "gameLocationHint": "Point \"Game Location\" at the folder that contains Data\\ (your Skyrim install, or wherever your mod manager launches the game from) - not the MO2 instance folder.",
+    "usvfsHint": "BOSPriority reads it exactly like the game would: if launched through MO2/Vortex, that path transparently shows your merged mod view; there is no need to separately resolve where your instance or mods folders live.",
+    "pickGameLocation": "Pick a Game Location first.",
+    "pickOutputLocation": "Pick an output folder first.",
+    "foundKeys": "Found %zu key(s), %lld in conflict.",
+    "noConflictsHint": "No conflicts - BOS will already produce the correct result directly from these files, nothing needs generating. Generate is still there if you just want a single consolidated ini (e.g. to tidy up a modlist), but it's optional.",
+    "decisionsSaved": "Conflict decisions updated and saved - remembered next time you scan this output folder.",
+    "nothingToMerge": "Nothing to merge - Scan Mods first.",
+    "resultLine": "%s: %d file(s) read, %d line(s) read, %d key(s) overridden by priority, %d line(s) %s.",
+    "wrote": "Wrote %s",
+    "blankedHint": "Original source ini files were replaced with empty stand-ins in this output folder - only AIO_SWAP.ini is active now.",
+    "generationAborted": "Generation aborted: %s",
+    "autoScanning": "Remembered Game/Output locations from last time - scanning automatically...",
+    "done": "Done",
+    "preview": "Preview",
+    "wouldBeWritten": "would be written",
+    "written": "written"
+  },
+  "dialog": {
+    "nothingToManage": {
+      "title": "Nothing to manage",
+      "message": "Scanned automatically and found no conflicts - BOS will already produce the correct result directly from these files, nothing needs generating. Generating a single consolidated ini is still there if you want one (e.g. to tidy up a modlist), but it's entirely optional. Close BOSPriority?",
+      "close": "Close BOSPriority",
+      "keepOpen": "Keep Open"
+    }
+  },
+  "conflicts": {
+    "title": "Manage BOS Conflicts",
+    "intro": "Only real conflicts are shown here - a key with only one line, or with chance-weighted variants (chanceR/S/L), is included as-is with nothing to decide. Pick which file wins each remaining conflict, or exclude a key entirely.",
+    "filterByType": "Filter by type:",
+    "allTypes": "All Types",
+    "unknownType": "Unknown",
+    "column": {
+      "type": "Type",
+      "key": "Key",
+      "winner": "Winner",
+      "candidates": "Candidates"
+    },
+    "selectHint": "Select a conflict above to resolve it.",
+    "exclude": "Exclude this key from AIO_SWAP.ini",
+    "excludedLabel": "(excluded)"
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "_language": "Deutsch",
+  "launcher": {
+    "tab": {
+      "general": "Allgemein",
+      "options": "Optionen"
+    },
+    "intro": "Legt eine explizite Prioritätsreihenfolge für Base Object Swapper *_SWAP.ini-Dateien fest, statt sich auf BOS' eigene alphabetische Regel zu verlassen.",
+    "warning": "Wenn du Mod Organizer 2 oder Vortex verwendest, starte BOSPriority über dessen Tool-Liste/Dashboard, nicht per Doppelklick auf die exe im Explorer - sonst sieht es nur deinen echten Data-Ordner, nicht deine installierten Mods.",
+    "gameLocation": {
+      "label": "Spielort (Ordner mit Data\\)",
+      "dialogTitle": "Spielort auswählen (Ordner mit Data)"
+    },
+    "outputLocation": {
+      "label": "Zielort (eigener Mod)",
+      "dialogTitle": "Zielordner auswählen"
+    },
+    "dryRun": "Nur Vorschau (Trockenlauf)",
+    "scanButton": "Mods scannen",
+    "manageConflictsButton": "Konflikte verwalten...",
+    "generateButton": "Generieren",
+    "logLabel": "Protokoll",
+    "browse": "Durchsuchen...",
+    "language": {
+      "label": "Sprache"
+    },
+    "theme": {
+      "label": "Design",
+      "system": "System",
+      "light": "Hell",
+      "dark": "Dunkel"
+    }
+  },
+  "log": {
+    "gameLocationHint": "Wähle bei \"Spielort\" den Ordner, der Data\\ enthält (deine Skyrim-Installation, oder wo dein Mod-Manager das Spiel startet) - nicht den MO2-Instanzordner.",
+    "usvfsHint": "BOSPriority liest diesen Ordner genau wie das Spiel selbst: über MO2/Vortex gestartet zeigt dieser Pfad bereits deine zusammengeführte Mod-Ansicht; es ist nicht nötig, Instanz- oder Mod-Ordner separat aufzulösen.",
+    "pickGameLocation": "Wähle zuerst einen Spielort.",
+    "pickOutputLocation": "Wähle zuerst einen Zielordner.",
+    "foundKeys": "%zu Schlüssel gefunden, %lld im Konflikt.",
+    "noConflictsHint": "Keine Konflikte - BOS erzeugt bereits direkt aus diesen Dateien das korrekte Ergebnis, nichts muss generiert werden. Generieren bleibt verfügbar, falls du nur eine einzelne konsolidierte ini möchtest (z. B. zum Aufräumen einer Modliste), ist aber optional.",
+    "decisionsSaved": "Konfliktentscheidungen aktualisiert und gespeichert - werden beim nächsten Scan dieses Zielordners übernommen.",
+    "nothingToMerge": "Nichts zu verschmelzen - zuerst Mods scannen.",
+    "resultLine": "%s: %d Datei(en) gelesen, %d Zeile(n) gelesen, %d Schlüssel per Priorität entschieden, %d Zeile(n) %s.",
+    "wrote": "Geschrieben: %s",
+    "blankedHint": "Die ursprünglichen ini-Dateien wurden in diesem Zielordner durch leere Platzhalter ersetzt - nur AIO_SWAP.ini ist jetzt aktiv.",
+    "generationAborted": "Generierung abgebrochen: %s",
+    "autoScanning": "Spiel-/Zielort vom letzten Mal gemerkt - automatischer Scan läuft...",
+    "done": "Fertig",
+    "preview": "Vorschau",
+    "wouldBeWritten": "würden geschrieben",
+    "written": "geschrieben"
+  },
+  "dialog": {
+    "nothingToManage": {
+      "title": "Nichts zu verwalten",
+      "message": "Automatisch gescannt, keine Konflikte gefunden - BOS erzeugt bereits direkt aus diesen Dateien das korrekte Ergebnis, nichts muss generiert werden. Eine einzelne konsolidierte ini zu generieren bleibt möglich, falls gewünscht (z. B. zum Aufräumen einer Modliste), ist aber vollkommen optional. BOSPriority schließen?",
+      "close": "BOSPriority schließen",
+      "keepOpen": "Geöffnet lassen"
+    }
+  },
+  "conflicts": {
+    "title": "BOS-Konflikte verwalten",
+    "intro": "Hier werden nur echte Konflikte angezeigt - ein Schlüssel mit nur einer Zeile, oder mit chance-gewichteten Varianten (chanceR/S/L), wird unverändert übernommen, nichts zu entscheiden. Wähle, welche Datei jeden verbleibenden Konflikt gewinnt, oder schließe einen Schlüssel ganz aus.",
+    "filterByType": "Nach Typ filtern:",
+    "allTypes": "Alle Typen",
+    "unknownType": "Unbekannt",
+    "column": {
+      "type": "Typ",
+      "key": "Schlüssel",
+      "winner": "Gewinner",
+      "candidates": "Kandidaten"
+    },
+    "selectHint": "Wähle oben einen Konflikt zur Bearbeitung aus.",
+    "exclude": "Diesen Schlüssel von AIO_SWAP.ini ausschließen",
+    "excludedLabel": "(ausgeschlossen)"
+  }
+}

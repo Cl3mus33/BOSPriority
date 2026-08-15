@@ -1,0 +1,77 @@
+{
+  "_language": "Italiano",
+  "launcher": {
+    "tab": {
+      "general": "Generale",
+      "options": "Opzioni"
+    },
+    "intro": "Permette di impostare un ordine di priorità esplicito per i file *_SWAP.ini di Base Object Swapper, invece di affidarsi alla regola alfabetica nativa di BOS.",
+    "warning": "Se usi Mod Organizer 2 o Vortex, avvia BOSPriority dalla sua lista di eseguibili/dashboard, non facendo doppio clic sull'exe in Esplora risorse - altrimenti vedrà solo la tua cartella Data reale, non le mod installate.",
+    "gameLocation": {
+      "label": "Posizione del gioco (cartella contenente Data\\)",
+      "dialogTitle": "Seleziona la posizione del gioco (cartella contenente Data)"
+    },
+    "outputLocation": {
+      "label": "Posizione di output (mod dedicata)",
+      "dialogTitle": "Seleziona la cartella di output"
+    },
+    "dryRun": "Solo anteprima (dry run)",
+    "scanButton": "Scansiona mod",
+    "manageConflictsButton": "Gestisci conflitti...",
+    "generateButton": "Genera",
+    "logLabel": "Registro",
+    "browse": "Sfoglia...",
+    "language": {
+      "label": "Lingua"
+    },
+    "theme": {
+      "label": "Tema",
+      "system": "Sistema",
+      "light": "Chiaro",
+      "dark": "Scuro"
+    }
+  },
+  "log": {
+    "gameLocationHint": "Imposta \"Posizione del gioco\" sulla cartella che contiene Data\\ (la tua installazione di Skyrim, o dove il tuo mod manager avvia il gioco) - non la cartella dell'istanza MO2.",
+    "usvfsHint": "BOSPriority legge questa cartella esattamente come farebbe il gioco: avviato tramite MO2/Vortex, questo percorso mostra già la tua vista fusa delle mod; non serve risolvere separatamente dove si trovano l'istanza o le cartelle delle mod.",
+    "pickGameLocation": "Scegli prima una posizione del gioco.",
+    "pickOutputLocation": "Scegli prima una cartella di output.",
+    "foundKeys": "%zu chiave/i trovata/e, %lld in conflitto.",
+    "noConflictsHint": "Nessun conflitto - BOS produrrà già il risultato corretto direttamente da questi file, non serve generare nulla. Genera resta disponibile se vuoi comunque un unico ini consolidato (ad es. per riordinare una modlist), ma è facoltativo.",
+    "decisionsSaved": "Decisioni sui conflitti aggiornate e salvate - verranno ricordate alla prossima scansione di questa cartella di output.",
+    "nothingToMerge": "Niente da unire - scansiona prima le mod.",
+    "resultLine": "%s: %d file letto/i, %d riga/e letta/e, %d chiave/i risolta/e per priorità, %d riga/e %s.",
+    "wrote": "Scritto: %s",
+    "blankedHint": "I file ini originali sono stati sostituiti con versioni vuote in questa cartella di output - ora è attivo solo AIO_SWAP.ini.",
+    "generationAborted": "Generazione annullata: %s",
+    "autoScanning": "Posizioni Gioco/Output ricordate dall'ultima volta - scansione automatica in corso...",
+    "done": "Fatto",
+    "preview": "Anteprima",
+    "wouldBeWritten": "verrebbero scritte",
+    "written": "scritte"
+  },
+  "dialog": {
+    "nothingToManage": {
+      "title": "Niente da gestire",
+      "message": "Scansione automatica completata, nessun conflitto trovato - BOS produrrà già il risultato corretto direttamente da questi file, non serve generare nulla. Generare un unico ini consolidato resta possibile se ne vuoi uno (ad es. per riordinare una modlist), ma è del tutto facoltativo. Chiudere BOSPriority?",
+      "close": "Chiudi BOSPriority",
+      "keepOpen": "Lascia aperto"
+    }
+  },
+  "conflicts": {
+    "title": "Gestisci conflitti BOS",
+    "intro": "Qui sono mostrati solo i conflitti reali - una chiave con una sola riga, o con varianti ponderate da probabilità (chanceR/S/L), viene inclusa così com'è, niente da decidere. Scegli quale file vince ogni conflitto rimanente, oppure escludi del tutto una chiave.",
+    "filterByType": "Filtra per tipo:",
+    "allTypes": "Tutti i tipi",
+    "unknownType": "Sconosciuto",
+    "column": {
+      "type": "Tipo",
+      "key": "Chiave",
+      "winner": "Vincitore",
+      "candidates": "Candidati"
+    },
+    "selectHint": "Seleziona un conflitto sopra per risolverlo.",
+    "exclude": "Escludi questa chiave da AIO_SWAP.ini",
+    "excludedLabel": "(escluso)"
+  }
+}

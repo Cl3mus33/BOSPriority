@@ -1,8 +1,10 @@
 #include "BOSIniMerger.hpp"
+#include "BOSLocale.hpp"
 #include "GUI/LauncherWindow.hpp"
 #include "StringUtil.hpp"
 
 #include <CLI/CLI.hpp>
+#include <nlohmann/json.hpp>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 #include <wx/wx.h>
@@ -11,6 +13,7 @@
 #include <array>
 #include <exception>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -22,6 +25,8 @@ using namespace std;
 namespace fs = std::filesystem;
 
 namespace {
+
+constexpr const wchar_t* SETTINGS_FILE_NAME = L"BOSPriority_settings.json";
 
 // True when this process owns its console alone (double-clicked from Explorer, or launched by
 // MO2/a similar tool that spawns a fresh console) rather than run from an existing terminal. Used
@@ -38,6 +43,15 @@ void pauseBeforeExit()
 {
     cout << "\nPress ENTER to exit...";
     cin.get();
+}
+
+auto getExecutableDir() -> fs::path
+{
+    array<wchar_t, MAX_PATH> buffer {};
+    if (GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size())) == 0) {
+        return {};
+    }
+    return fs::path(buffer.data()).parent_path();
 }
 
 struct BOSPriorityCLIArgs {
@@ -158,19 +172,125 @@ auto runCLI(int argC, char** argV) -> int
     return 0;
 }
 
-class BOSPriorityApp : public wxApp {
-public:
-    auto OnInit() -> bool override
-    {
-        auto* window = new LauncherWindow();
-        window->Show(true);
-        return true;
+// Only what's needed before the first window exists: uiLanguage/uiTheme must be known to
+// initialize BOSLocale and apply the requested appearance before any wxWindow is created (see
+// runGUI below) - LauncherWindow's own saveSettings()/InitParams plumbing takes over for
+// everything after that.
+auto loadInitialParams(const fs::path& exeDir) -> LauncherWindow::InitParams
+{
+    LauncherWindow::InitParams params;
+    string uiLanguage = "en";
+
+    const auto file = exeDir / SETTINGS_FILE_NAME;
+    if (fs::exists(file)) {
+        try {
+            ifstream f(file);
+            const auto json = nlohmann::json::parse(f);
+            if (json.contains("gameDir") && json["gameDir"].is_string()) {
+                params.gameDir = StringUtil::utf8ToUtf16(json["gameDir"].get<string>());
+            }
+            if (json.contains("outputDir") && json["outputDir"].is_string()) {
+                params.outputDir = StringUtil::utf8ToUtf16(json["outputDir"].get<string>());
+            }
+            if (json.contains("uiLanguage") && json["uiLanguage"].is_string()) {
+                uiLanguage = json["uiLanguage"].get<string>();
+            }
+            if (json.contains("uiTheme") && json["uiTheme"].is_string()) {
+                params.theme = StringUtil::utf8ToUtf16(json["uiTheme"].get<string>());
+            }
+        } catch (const exception&) {
+            // corrupt/unreadable - start with defaults
+        }
     }
-};
+
+    BOSLocale::init(exeDir / "BOSPriority_translations", uiLanguage);
+    return params;
+}
+
+auto runGUI() -> int
+{
+    // Console-subsystem build (so CLI/automation output and the pause-before-exit prompt work),
+    // but that means a console window pops up alongside the GUI window every time - minimize it
+    // instead of leaving it sitting in front. Still reachable from the taskbar if ever needed;
+    // the CLI path above never touches this, console stays visible there.
+    if (HWND consoleWindow = GetConsoleWindow(); consoleWindow != nullptr) {
+        ShowWindow(consoleWindow, SW_MINIMIZE);
+    }
+
+    const auto exeDir = getExecutableDir();
+
+    // Bootstrapped manually (not via wxIMPLEMENT_APP/wxEntry(argc,argv)) so there's a point to
+    // call wxTheApp->SetAppearance() at, before any window exists - it's a wxApp-level setting
+    // that doesn't live-update already-shown windows. Same approach as AutoSeasons' main.cpp,
+    // required by the same constraint, not an arbitrary style choice.
+    wxApp::SetInstance(new wxApp()); // NOLINT(cppcoreguidelines-owning-memory)
+    if (!wxEntryStart(nullptr, nullptr)) {
+        cerr << "Failed to initialize wxWidgets.\n";
+        return 1;
+    }
+
+    auto params = loadInitialParams(exeDir);
+
+    int result = 0;
+    do {
+        // Re-applied every loop iteration so a theme change made in the Options tab takes effect
+        // on the relaunch/restart that follows it.
+        wxApp::Appearance appearance = wxApp::Appearance::System;
+        if (params.theme == "light") {
+            appearance = wxApp::Appearance::Light;
+        } else if (params.theme == "dark") {
+            appearance = wxApp::Appearance::Dark;
+        }
+        if (wxTheApp->SetAppearance(appearance) != wxApp::AppearanceResult::Ok) {
+            // Not fatal - the window still opens, just without the requested forced appearance
+            // (can happen if the OS/wxWidgets combination doesn't support overriding the
+            // system-wide light/dark preference per-app).
+            cerr << "Could not apply the requested theme; falling back to system appearance.\n";
+        }
+        // SetAppearance() alone only covers a few high-level things (e.g. the title bar) -
+        // painting individual controls in dark colors needs wx's separate MSW-specific dark mode
+        // support, turned on via MSWEnableDarkMode(). Only called for "dark" specifically: calling
+        // it for "system" turned out to make dark rendering win regardless of SetAppearance()
+        // whenever the OS itself is in dark mode, which broke explicit "Light". Same reasoning and
+        // sequence as AutoSeasons' main.cpp, which found this the hard way.
+        if (params.theme == "dark") {
+            wxTheApp->MSWEnableDarkMode(wxApp::DarkMode_Always);
+        }
+
+        auto* launcher = new LauncherWindow(params); // NOLINT(cppcoreguidelines-owning-memory)
+        result = launcher->ShowModal();
+        if (result == LauncherWindow::RESULT_RELAUNCH || result == LauncherWindow::RESULT_RESTART) {
+            // Preserve current (possibly unsaved) field values across the rebuild.
+            params = launcher->getParams();
+        }
+        launcher->Destroy();
+    } while (result == LauncherWindow::RESULT_RELAUNCH);
+
+    if (result == LauncherWindow::RESULT_RESTART) {
+        // Settings (including the new theme) were already saved by LauncherWindow::onThemeChanged
+        // before EndModal() - respawn a fresh process so wx's MSW dark mode support starts clean.
+        // wxEntryCleanup() is deliberately deferred until after this attempt - calling it first
+        // would tear down wx before a failure could be reported through it.
+        STARTUPINFOW startupInfo {};
+        startupInfo.cb = sizeof(startupInfo);
+        PROCESS_INFORMATION processInfo {};
+        const auto exeFullPath = (exeDir / "BOSPriority.exe").wstring();
+        const auto workingDir = exeDir.wstring();
+        if (CreateProcessW(exeFullPath.c_str(), nullptr, nullptr, nullptr, FALSE, 0, nullptr, workingDir.c_str(),
+                &startupInfo, &processInfo)
+            != 0) {
+            CloseHandle(processInfo.hProcess);
+            CloseHandle(processInfo.hThread);
+        } else {
+            cerr << "Failed to restart BOSPriority for the new theme (error " << GetLastError() << ").\n";
+        }
+    }
+
+    wxEntryCleanup();
+    return 0;
+}
 
 } // namespace
-
-wxIMPLEMENT_APP_NO_MAIN(BOSPriorityApp);
 
 auto main(int argc, char** argv) -> int
 {
@@ -179,13 +299,5 @@ auto main(int argc, char** argv) -> int
         return runCLI(argc, argv);
     }
 
-    // GUI launch: the exe is a console-subsystem build (so CLI/automation output and the
-    // pause-before-exit prompt work), but that means a console window pops up alongside the GUI
-    // window every time - minimize it instead of leaving it sitting in front. Still reachable
-    // from the taskbar if ever needed; CLI mode above never touches this, console stays visible.
-    if (HWND consoleWindow = GetConsoleWindow(); consoleWindow != nullptr) {
-        ShowWindow(consoleWindow, SW_MINIMIZE);
-    }
-
-    return wxEntry(argc, argv);
+    return runGUI();
 }

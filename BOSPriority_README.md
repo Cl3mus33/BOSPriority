@@ -70,6 +70,19 @@ themselves launch, same caveat as any other tool in this family (xEdit, AutoSeas
 7. Enable the output mod in your manager, placed after every mod that shipped a BOS ini it
    depends on - its emptied stand-ins need to load after the originals to take effect.
 
+### Options tab
+
+- **Language**: English, Deutsch, Español, Français, Italiano, or Português (Brasil). Changing it
+  rebuilds the window immediately (no restart) - translation files live in
+  `BOSPriority_translations/` next to the exe, one JSON per language; a missing/incomplete
+  translation always falls back to English for that string.
+- **Theme**: System, Light, or Dark. Changing it **restarts BOSPriority** (a real Windows
+  limitation, not a bug: once dark-mode control rendering is turned on for a process it can't be
+  reliably turned back off in the same process, so a clean process is the only way to guarantee
+  "Light" stays fully light). Note that Windows' own dark-mode support in wxWidgets is still
+  experimental - the title bar reliably follows the theme, but not every individual control is
+  guaranteed to repaint dark.
+
 ### Command-line / automation
 
 ```
@@ -98,7 +111,8 @@ cmake --build buildRelease --config RelWithDebInfo
 ## Credits
 
 - Architecture (scanning the real Data path and relying on the mod manager's own virtual file
-  system, rather than independently parsing MO2/Vortex instance data) mirrors
+  system, rather than independently parsing MO2/Vortex instance data; the Options tab's
+  translation system and theme/restart handling) mirrors
   [AutoSeasons](https://github.com/Cl3mus33/AutoSeasons) by Cl3mus33 (GPLv3), itself derived from
   [PGPatcher](https://github.com/hakasapl/PGPatcher) by hakasapl (GPLv3).
 - [Base Object Swapper](https://www.nexusmods.com/skyrimspecialedition/mods/60805) by fenix31415 /
