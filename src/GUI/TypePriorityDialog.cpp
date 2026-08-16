@@ -1,5 +1,6 @@
 #include "GUI/TypePriorityDialog.hpp"
 #include "BOSLocale.hpp"
+#include "GUI/ConflictTypeLabels.hpp"
 
 #include <algorithm>
 
@@ -9,21 +10,43 @@ namespace {
 constexpr int ID_MOVE_UP = wxID_HIGHEST + 30;
 constexpr int ID_MOVE_DOWN = wxID_HIGHEST + 31;
 
-// Must stay byte-identical to ConflictTableDialog's own allTypesLabel(): it's both the displayed
-// entry and the map key that dialog looks the fallback ranking up by. Looked up per call rather
-// than stored in a static so an in-process language change is picked up (see main.cpp's loop).
-auto allTypesLabel() -> wxString
+// Fills `order` with `saved` (any file no longer in allFiles dropped), then appends whatever's in
+// allFiles that isn't in there yet - so a type customized before a rescan still shows every
+// currently-relevant file, newly-relevant ones included, rather than silently hiding them.
+auto completeOrder(const vector<string>& saved, const vector<string>& allFiles) -> vector<string>
 {
-    return BOSTr("conflicts.allTypes", "All Types");
+    vector<string> order;
+    for (const auto& file : saved) {
+        if (ranges::find(allFiles, file) != allFiles.end() && ranges::find(order, file) == order.end()) {
+            order.push_back(file);
+        }
+    }
+    for (const auto& file : allFiles) {
+        if (ranges::find(order, file) == order.end()) {
+            order.push_back(file);
+        }
+    }
+    return order;
 }
 } // namespace
 
-TypePriorityDialog::TypePriorityDialog(wxWindow* parent, vector<string> allFiles, vector<wxString> types)
+TypePriorityDialog::TypePriorityDialog(wxWindow* parent, vector<string> allFiles, vector<string> types,
+    map<string, vector<string>> initialPriorities)
     : wxDialog(parent, wxID_ANY, BOSTr("typePriority.title", "Set Priority by Type"), wxDefaultPosition,
                wxSize(560, 480), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 {
-    m_priorities[allTypesLabel()] = std::move(allFiles);
-    m_currentType = allTypesLabel();
+    const auto savedAllTypes = initialPriorities.find(CONFLICT_ALL_TYPES_KEY);
+    m_priorities[CONFLICT_ALL_TYPES_KEY] = savedAllTypes != initialPriorities.end()
+        ? completeOrder(savedAllTypes->second, allFiles)
+        : std::move(allFiles);
+    m_currentType = CONFLICT_ALL_TYPES_KEY;
+
+    for (const auto& [type, order] : initialPriorities) {
+        if (type == CONFLICT_ALL_TYPES_KEY) {
+            continue; // already seeded above
+        }
+        m_priorities[type] = completeOrder(order, m_priorities[CONFLICT_ALL_TYPES_KEY]);
+    }
 
     auto* topSizer = new wxBoxSizer(wxVERTICAL);
 
@@ -33,8 +56,9 @@ TypePriorityDialog::TypePriorityDialog(wxWindow* parent, vector<string> allFiles
                              "top. Applying this resolves every conflict at once: for each one, the "
                              "highest-ranked file that actually has a line for it wins. Pick a type below "
                              "to give just that type a different order - anything you don't customise "
-                             "falls back to \"%s\"."),
-            allTypesLabel()));
+                             "falls back to \"%s\". Your ranking is remembered for this output folder and "
+                             "reapplied automatically on your next scan."),
+            conflictDisplayTypeLabel(CONFLICT_ALL_TYPES_KEY)));
     introText->Wrap(520);
     topSizer->Add(introText, 0, wxALL, 10);
 
@@ -42,10 +66,12 @@ TypePriorityDialog::TypePriorityDialog(wxWindow* parent, vector<string> allFiles
     typeSizer->Add(new wxStaticText(this, wxID_ANY, BOSTr("typePriority.typeLabel", "Type:")), 0,
                    wxALIGN_CENTER_VERTICAL | wxALL, 5);
     m_typeChoice = new wxChoice(this, wxID_ANY);
-    m_typeChoice->Append(allTypesLabel());
+    m_typeChoice->Append(conflictDisplayTypeLabel(CONFLICT_ALL_TYPES_KEY));
+    m_typeChoiceRawValues.emplace_back(CONFLICT_ALL_TYPES_KEY);
     for (const auto& type : types) {
-        if (type != allTypesLabel()) {
-            m_typeChoice->Append(type);
+        if (type != CONFLICT_ALL_TYPES_KEY) {
+            m_typeChoice->Append(conflictDisplayTypeLabel(type));
+            m_typeChoiceRawValues.push_back(type);
         }
     }
     m_typeChoice->SetSelection(0);
@@ -96,20 +122,24 @@ void TypePriorityDialog::saveCurrentListToPriorities()
     m_priorities[m_currentType] = std::move(order);
 }
 
-void TypePriorityDialog::switchToType(const wxString& type)
+void TypePriorityDialog::switchToType(const string& type)
 {
     saveCurrentListToPriorities();
     m_currentType = type;
     if (!m_priorities.contains(type)) {
         // Not customized yet - start from the current "All Types" order.
-        m_priorities[type] = m_priorities[allTypesLabel()];
+        m_priorities[type] = m_priorities[CONFLICT_ALL_TYPES_KEY];
     }
     refreshListBox();
 }
 
 void TypePriorityDialog::onTypeChanged(wxCommandEvent& /*event*/)
 {
-    switchToType(m_typeChoice->GetStringSelection());
+    const int selection = m_typeChoice->GetSelection();
+    if (selection == wxNOT_FOUND || static_cast<size_t>(selection) >= m_typeChoiceRawValues.size()) {
+        return;
+    }
+    switchToType(m_typeChoiceRawValues[static_cast<size_t>(selection)]);
 }
 
 void TypePriorityDialog::moveSelected(int delta)
@@ -140,7 +170,7 @@ void TypePriorityDialog::onMoveDown(wxCommandEvent& /*event*/)
     moveSelected(1);
 }
 
-auto TypePriorityDialog::getPriorities() const -> const map<wxString, vector<string>>&
+auto TypePriorityDialog::getPriorities() const -> const map<string, vector<string>>&
 {
     return m_priorities;
 }

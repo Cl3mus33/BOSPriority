@@ -546,6 +546,7 @@ void BOSIniMerger::applyDecisions(vector<SwapKey>& keys, const fs::path& decisio
                 }
             }
         }
+        swapKey.userDecided = true;
     }
 }
 
@@ -553,8 +554,11 @@ void BOSIniMerger::saveDecisions(const vector<SwapKey>& keys, const fs::path& de
 {
     auto json = nlohmann::json::object();
     for (const auto& swapKey : keys) {
-        if (!swapKey.isRealConflict()) {
-            continue; // nothing to persist - not shown/editable in the conflict table
+        if (!swapKey.isRealConflict() || !swapKey.userDecided) {
+            // Not shown/editable in the conflict table, or nobody has actually decided it -
+            // persisting its arbitrary default would freeze it as if it were a real choice (see
+            // SwapKey::userDecided's doc comment).
+            continue;
         }
 
         json[storageKey(swapKey)] = {
@@ -574,4 +578,79 @@ void BOSIniMerger::saveDecisions(const vector<SwapKey>& keys, const fs::path& de
         // worth aborting generation over, but worth not pretending it silently succeeded either.
         throw runtime_error("BOSIniMerger: failed to write " + decisionsFile.filename().string());
     }
+}
+
+void BOSIniMerger::applyTypePriorities(vector<SwapKey>& keys, const map<string, vector<string>>& priorities)
+{
+    if (priorities.empty()) {
+        return;
+    }
+
+    for (auto& swapKey : keys) {
+        if (!swapKey.isRealConflict() || swapKey.excluded) {
+            continue;
+        }
+
+        auto it = priorities.find(swapKey.recordType.value_or("Unknown"));
+        if (it == priorities.end()) {
+            it = priorities.find("All Types");
+        }
+        if (it == priorities.end()) {
+            continue;
+        }
+
+        for (const auto& file : it->second) {
+            const auto candidate
+                = ranges::find_if(swapKey.candidates, [&](const SwapEntry& e) { return e.sourceFile == file; });
+            if (candidate != swapKey.candidates.end()) {
+                swapKey.selectedCandidate = static_cast<int>(candidate - swapKey.candidates.begin());
+                break;
+            }
+        }
+    }
+}
+
+void BOSIniMerger::saveTypePriorities(const map<string, vector<string>>& priorities, const fs::path& rankingFile)
+{
+    auto json = nlohmann::json::object();
+    for (const auto& [type, files] : priorities) {
+        json[type] = files;
+    }
+
+    fs::create_directories(rankingFile.parent_path());
+    try {
+        ofstream out(rankingFile);
+        out.exceptions(ios::failbit | ios::badbit);
+        out << json.dump(2);
+    } catch (const exception&) {
+        throw runtime_error("BOSIniMerger: failed to write " + rankingFile.filename().string());
+    }
+}
+
+auto BOSIniMerger::loadTypePriorities(const fs::path& rankingFile) -> map<string, vector<string>>
+{
+    map<string, vector<string>> result;
+    if (!fs::exists(rankingFile)) {
+        return result;
+    }
+
+    try {
+        ifstream f(rankingFile);
+        const auto json = nlohmann::json::parse(f);
+        for (auto it = json.begin(); it != json.end(); ++it) {
+            if (!it.value().is_array()) {
+                continue;
+            }
+            vector<string> files;
+            for (const auto& entry : it.value()) {
+                if (entry.is_string()) {
+                    files.push_back(entry.get<string>());
+                }
+            }
+            result[it.key()] = std::move(files);
+        }
+    } catch (const exception&) {
+        return {}; // corrupt/unreadable - treat like no saved ranking rather than fail the scan
+    }
+    return result;
 }

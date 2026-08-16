@@ -2,6 +2,7 @@
 
 #include "BOSIniMerger.hpp"
 
+#include <filesystem>
 #include <optional>
 #include <string>
 #include <vector>
@@ -18,7 +19,9 @@ class ConflictTableDialog : public wxDialog {
 public:
     /// keys: the full scan() result (conflicts and non-conflicts alike). Non-conflicting entries
     /// pass through untouched; only conflicting ones can be edited here.
-    ConflictTableDialog(wxWindow* parent, std::vector<SwapKey> keys);
+    /// outputDir: where a "Set Priority by Type" ranking is loaded from and saved to
+    /// (BOSPriority_priorities.json, alongside BOSPriority_decisions.json).
+    ConflictTableDialog(wxWindow* parent, std::vector<SwapKey> keys, std::filesystem::path outputDir);
 
     /// The full key set, with any winner/exclude edits applied.
     [[nodiscard]] auto getKeys() const -> const std::vector<SwapKey>&;
@@ -28,7 +31,7 @@ private:
     /// regardless of which BOS location section scopes it.
     struct KeyGroup {
         std::string key;
-        wxString typeLabel;
+        wxString typeKey; // raw/stable - see ConflictTypeLabels.hpp, translated only for display
         std::vector<size_t> memberIndices; // into m_keys
         std::vector<std::string> distinctFiles; // union of candidate source files, first-seen order
     };
@@ -48,10 +51,12 @@ private:
     void onSetPriorityByType(wxCommandEvent& event);
 
     std::vector<SwapKey> m_keys; // full set, edited in place
+    std::filesystem::path m_outputDir;
     std::vector<KeyGroup> m_groups; // every real conflict, grouped by key
     std::vector<size_t> m_rowToGroupIndex; // list row -> index into m_groups, current filter
 
     wxChoice* m_typeFilter = nullptr;
+    std::vector<wxString> m_typeFilterRawValues; // parallel to m_typeFilter's items
     wxListCtrl* m_listCtrl = nullptr;
     wxStaticText* m_detailKeyLabel = nullptr;
     wxCheckBox* m_excludeCheck = nullptr;

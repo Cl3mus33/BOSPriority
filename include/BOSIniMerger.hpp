@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -47,6 +48,16 @@ struct SwapKey {
     /// If true, this key is dropped entirely - no line for it ends up in AIO_SWAP.ini. Not
     /// offered for chance pools.
     bool excluded = false;
+    /// True once a real user action has settled this key: a radio pick or exclude toggle in the
+    /// conflict table, or a saved decision loaded by applyDecisions(). Left false for a key that's
+    /// just sitting at its default (BOS's own alphabetical-last-file-wins) because nobody has
+    /// looked at it yet. saveDecisions() only persists keys where this is true - without it, every
+    /// untouched conflict's arbitrary default would get written to disk as if it were a deliberate
+    /// choice, and a mod installed later that also defines that key would silently lose to a
+    /// "decision" nobody actually made. Not set by applyTypePriorities(): that ranking is meant to
+    /// keep resolving whatever conflicts exist on a future scan, including ones that don't exist
+    /// yet, so there's nothing here that needs freezing for it either.
+    bool userDecided = false;
 
     /// True only for an actual cross-mod disagreement: 2+ non-chance candidates that come from
     /// more than one distinct source file AND don't all say the same thing. Both halves are
@@ -78,6 +89,12 @@ struct SwapKey {
 /// Filename used to persist winner/exclude decisions in an output folder - shared between the GUI
 /// and the CLI so both read/write the exact same file.
 inline constexpr const wchar_t* BOS_PRIORITY_DECISIONS_FILE_NAME = L"BOSPriority_decisions.json";
+
+/// Filename used to persist the "Set Priority by Type" file ranking - kept separate from
+/// BOSPriority_decisions.json because it isn't an answer to a specific key: it's reapplied fresh
+/// after every scan (see applyTypePriorities()), so it naturally keeps resolving conflicts that
+/// didn't exist when it was set, rather than needing its own touched/untouched tracking.
+inline constexpr const wchar_t* BOS_PRIORITY_TYPE_RANKING_FILE_NAME = L"BOSPriority_priorities.json";
 
 struct BosMergeStats {
     int filesRead = 0;
@@ -131,4 +148,23 @@ public:
     /// decisionsFile as JSON, keyed by "section||key". Non-conflicting keys have nothing to
     /// persist and are skipped.
     static void saveDecisions(const std::vector<SwapKey>& keys, const std::filesystem::path& decisionsFile);
+
+    /// Ranks source files - globally ("All Types") and/or per record type ("STAT", "Unknown" for
+    /// an unresolved type, ...) - and applies that ranking to every real, non-excluded conflict:
+    /// for each one independently (already at (section,key)/single-location granularity, not
+    /// grouped), walks its type's list (falling back to "All Types") until it finds a file that
+    /// actually has a candidate there, and picks it. A conflict whose type has no matching entry
+    /// in either list, or that's already excluded, is left untouched. Does NOT set
+    /// SwapKey::userDecided - see that field's doc comment for why.
+    static void applyTypePriorities(std::vector<SwapKey>& keys,
+                                     const std::map<std::string, std::vector<std::string>>& priorities);
+
+    /// Persists a type-ranking (see applyTypePriorities) as JSON to rankingFile.
+    static void saveTypePriorities(const std::map<std::string, std::vector<std::string>>& priorities,
+                                    const std::filesystem::path& rankingFile);
+
+    /// Loads a previously-saved ranking, or an empty map if rankingFile doesn't exist or can't be
+    /// parsed.
+    [[nodiscard]] static auto loadTypePriorities(const std::filesystem::path& rankingFile)
+        -> std::map<std::string, std::vector<std::string>>;
 };

@@ -85,7 +85,7 @@
   },
   "typePriority": {
     "title": "Set Priority by Type",
-    "intro": "Rank every source file that appears in a real conflict, most trusted at the top. Applying this resolves every conflict at once: for each one, the highest-ranked file that actually has a line for it wins. Pick a type below to give just that type a different order - anything you don't customise falls back to \"%s\".",
+    "intro": "Rank every source file that appears in a real conflict, most trusted at the top. Applying this resolves every conflict at once: for each one, the highest-ranked file that actually has a line for it wins. Pick a type below to give just that type a different order - anything you don't customise falls back to \"%s\". Your ranking is remembered for this output folder and reapplied automatically on your next scan.",
     "typeLabel": "Type:",
     "moveUp": "Move Up",
     "moveDown": "Move Down"

@@ -264,6 +264,13 @@ void LauncherWindow::applySavedDecisions(vector<SwapKey>& keys) const
     BOSIniMerger::applyDecisions(keys, outputDir / BOS_PRIORITY_DECISIONS_FILE_NAME);
 }
 
+void LauncherWindow::applySavedTypePriorities(vector<SwapKey>& keys) const
+{
+    const fs::path outputDir(m_outputPathCtrl->GetValue().ToStdWstring());
+    const auto priorities = BOSIniMerger::loadTypePriorities(outputDir / BOS_PRIORITY_TYPE_RANKING_FILE_NAME);
+    BOSIniMerger::applyTypePriorities(keys, priorities);
+}
+
 void LauncherWindow::saveDecisions() const
 {
     const fs::path outputDir(m_outputPathCtrl->GetValue().ToStdWstring());
@@ -287,6 +294,10 @@ void LauncherWindow::performScan()
     const wxBusyCursor busyCursor;
 
     m_keys = BOSIniMerger::scan(gameDir);
+    // Ranking first, specific per-key decisions second - a saved decision is a more deliberate,
+    // targeted choice than a general file ranking and should win where both apply, same reasoning
+    // as the CLI's --file-priority-before-applyDecisions ordering.
+    applySavedTypePriorities(m_keys);
     applySavedDecisions(m_keys);
 
     const auto conflictCount = countConflicts(m_keys);
@@ -370,7 +381,8 @@ void LauncherWindow::autoScanOnLaunch()
 
 void LauncherWindow::onManageConflicts(wxCommandEvent& /*event*/)
 {
-    ConflictTableDialog dlg(this, m_keys);
+    const fs::path outputDir(m_outputPathCtrl->GetValue().ToStdWstring());
+    ConflictTableDialog dlg(this, m_keys, outputDir);
     if (dlg.ShowModal() != wxID_OK) {
         return;
     }

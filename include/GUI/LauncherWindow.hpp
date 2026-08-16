@@ -42,6 +42,11 @@ private:
     void log(const wxString& msg);
     void applySavedDecisions(std::vector<SwapKey>& keys) const;
     void saveDecisions() const;
+    /// Reapplies a previously-saved "Set Priority by Type" ranking (if any) after every scan -
+    /// unlike per-key decisions, a ranking is meant to keep resolving whatever conflicts exist on
+    /// this scan, including ones that didn't exist when it was set, so there's no separate
+    /// touched/untouched state to track for it.
+    void applySavedTypePriorities(std::vector<SwapKey>& keys) const;
     void updateButtonStates();
 
     /// Runs a scan against the current Game Location and stores the result in m_keys - shared by

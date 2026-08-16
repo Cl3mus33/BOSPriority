@@ -1,5 +1,6 @@
 #include "GUI/ConflictTableDialog.hpp"
 #include "BOSLocale.hpp"
+#include "GUI/ConflictTypeLabels.hpp"
 #include "GUI/TypePriorityDialog.hpp"
 
 #include <algorithm>
@@ -9,21 +10,11 @@
 
 using namespace std;
 
-namespace {
-// Looked up fresh on every call rather than cached in a static: a language change rebuilds these
-// windows in-process (see main.cpp's relaunch loop), so a value captured at first use would keep
-// showing the previous language. TypePriorityDialog reads the same key, so the two always agree -
-// getPriorities() is keyed by this exact string.
-auto allTypesLabel() -> wxString
-{
-    return BOSTr("conflicts.allTypes", "All Types");
-}
-} // namespace
-
-ConflictTableDialog::ConflictTableDialog(wxWindow* parent, vector<SwapKey> keys)
+ConflictTableDialog::ConflictTableDialog(wxWindow* parent, vector<SwapKey> keys, filesystem::path outputDir)
     : wxDialog(parent, wxID_ANY, BOSTr("conflicts.title", "Manage BOS Conflicts"), wxDefaultPosition,
                wxSize(820, 640), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
     , m_keys(std::move(keys))
+    , m_outputDir(std::move(outputDir))
 {
     auto* topSizer = new wxBoxSizer(wxVERTICAL);
 
@@ -119,8 +110,8 @@ void ConflictTableDialog::buildGroups()
 
         auto& group = m_groups[groupIdx];
         group.memberIndices.push_back(i);
-        if (group.typeLabel.IsEmpty() && swapKey.recordType) {
-            group.typeLabel = *swapKey.recordType;
+        if (group.typeKey.IsEmpty() && swapKey.recordType) {
+            group.typeKey = *swapKey.recordType;
         }
         for (const auto& candidate : swapKey.candidates) {
             if (ranges::find(group.distinctFiles, candidate.sourceFile) == group.distinctFiles.end()) {
@@ -130,8 +121,8 @@ void ConflictTableDialog::buildGroups()
     }
 
     for (auto& group : m_groups) {
-        if (group.typeLabel.IsEmpty()) {
-            group.typeLabel = BOSTr("conflicts.unknownType", "Unknown");
+        if (group.typeKey.IsEmpty()) {
+            group.typeKey = CONFLICT_UNKNOWN_TYPE_KEY;
         }
     }
 }
@@ -140,13 +131,17 @@ void ConflictTableDialog::rebuildTypeFilterChoices()
 {
     set<wxString> types;
     for (const auto& group : m_groups) {
-        types.insert(group.typeLabel);
+        types.insert(group.typeKey);
     }
 
     m_typeFilter->Clear();
-    m_typeFilter->Append(allTypesLabel());
+    m_typeFilterRawValues.clear();
+
+    m_typeFilter->Append(conflictDisplayTypeLabel(CONFLICT_ALL_TYPES_KEY));
+    m_typeFilterRawValues.emplace_back(CONFLICT_ALL_TYPES_KEY);
     for (const auto& type : types) {
-        m_typeFilter->Append(type);
+        m_typeFilter->Append(conflictDisplayTypeLabel(type));
+        m_typeFilterRawValues.push_back(type);
     }
     m_typeFilter->SetSelection(0);
 }
@@ -179,15 +174,19 @@ void ConflictTableDialog::rebuildList()
     m_rowToGroupIndex.clear();
     clearDetail();
 
-    const wxString filter = m_typeFilter->GetStringSelection();
+    const int filterSelection = m_typeFilter->GetSelection();
+    const wxString filterRaw
+        = (filterSelection != wxNOT_FOUND && static_cast<size_t>(filterSelection) < m_typeFilterRawValues.size())
+        ? m_typeFilterRawValues[static_cast<size_t>(filterSelection)]
+        : wxString(CONFLICT_ALL_TYPES_KEY);
 
     for (size_t i = 0; i < m_groups.size(); ++i) {
         const auto& group = m_groups[i];
-        if (filter != allTypesLabel() && filter != group.typeLabel) {
+        if (filterRaw != CONFLICT_ALL_TYPES_KEY && filterRaw != group.typeKey) {
             continue;
         }
 
-        const long row = m_listCtrl->InsertItem(m_listCtrl->GetItemCount(), group.typeLabel);
+        const long row = m_listCtrl->InsertItem(m_listCtrl->GetItemCount(), conflictDisplayTypeLabel(group.typeKey));
         m_listCtrl->SetItem(row, 1, group.key);
         m_listCtrl->SetItem(row, 2, wxString::Format("%zu", group.memberIndices.size()));
         m_listCtrl->SetItem(row, 3, winnerLabelFor(group));
@@ -295,6 +294,7 @@ void ConflictTableDialog::applyWinnerFile(const KeyGroup& group, const string& w
             if (swapKey.candidates[i].sourceFile == winnerFile) {
                 swapKey.selectedCandidate = static_cast<int>(i);
                 swapKey.excluded = false;
+                swapKey.userDecided = true;
                 break;
             }
         }
@@ -325,6 +325,7 @@ void ConflictTableDialog::onExcludeToggled(wxCommandEvent& /*event*/)
     const bool excluded = m_excludeCheck->GetValue();
     for (const size_t idx : group.memberIndices) {
         m_keys[idx].excluded = excluded;
+        m_keys[idx].userDecided = true;
     }
 
     for (auto* radio : m_radioButtons) {
@@ -365,48 +366,29 @@ void ConflictTableDialog::onSetPriorityByType(wxCommandEvent& /*event*/)
         }
     }
 
-    vector<wxString> types;
+    vector<string> types;
     for (const auto& group : m_groups) {
-        if (ranges::find(types, group.typeLabel) == types.end()) {
-            types.push_back(group.typeLabel);
+        const string typeKey = group.typeKey.ToStdString();
+        if (ranges::find(types, typeKey) == types.end()) {
+            types.push_back(typeKey);
         }
     }
 
-    TypePriorityDialog dlg(this, allFiles, types);
+    const auto rankingFile = m_outputDir / BOS_PRIORITY_TYPE_RANKING_FILE_NAME;
+    auto initialPriorities = BOSIniMerger::loadTypePriorities(rankingFile);
+
+    TypePriorityDialog dlg(this, allFiles, types, std::move(initialPriorities));
     if (dlg.ShowModal() != wxID_OK) {
         return;
     }
 
     const auto& priorities = dlg.getPriorities();
-    for (auto& group : m_groups) {
-        auto it = priorities.find(group.typeLabel);
-        if (it == priorities.end()) {
-            it = priorities.find(allTypesLabel());
-        }
-        if (it == priorities.end()) {
-            continue;
-        }
-
-        // Resolved per location, not once per group: the highest-ranked file often only has a
-        // candidate for some of a key's locations, and the rest should fall through to the next
-        // ranked file that does - applying the group's single best file and leaving the remaining
-        // locations on BOS's alphabetical default would ignore the ranking exactly where it was
-        // needed most. An explicitly excluded location is left excluded: that's a deliberate
-        // decision the user made per key, not something a file ranking should silently undo.
-        for (const size_t idx : group.memberIndices) {
-            auto& swapKey = m_keys[idx];
-            if (swapKey.excluded) {
-                continue;
-            }
-            for (const auto& file : it->second) {
-                const auto candidate = ranges::find_if(
-                    swapKey.candidates, [&](const SwapEntry& e) { return e.sourceFile == file; });
-                if (candidate != swapKey.candidates.end()) {
-                    swapKey.selectedCandidate = static_cast<int>(candidate - swapKey.candidates.begin());
-                    break;
-                }
-            }
-        }
+    BOSIniMerger::applyTypePriorities(m_keys, priorities);
+    try {
+        BOSIniMerger::saveTypePriorities(priorities, rankingFile);
+    } catch (const exception&) {
+        // Applied in-memory regardless - losing the save just means it won't be remembered next
+        // scan, not worth blocking the rest of this dialog over.
     }
 
     rebuildList();
