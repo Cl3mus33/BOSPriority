@@ -308,11 +308,18 @@ auto BOSIniMerger::scan(const fs::path& gameDir) -> vector<SwapKey>
                     result.push_back(std::move(swapKey));
                 }
 
-                // Skip exact duplicate lines for this key (same text, whether repeated within one
-                // file by mistake or coincidentally identical across two) - nothing to decide
-                // between two candidates that would produce the same output either way.
+                // Skip a line this same file already declared verbatim for this key (a copy-paste
+                // artifact, seen in real exports) - nothing to decide between two candidates from
+                // one file that would produce the same output either way. An identical line from a
+                // DIFFERENT file is deliberately kept: merge() derives the set of originals to
+                // blank from the recorded candidates, so dropping the second file here would leave
+                // its ini live in the load order next to AIO_SWAP.ini - and since AIO_SWAP.ini
+                // sorts near-first alphabetically, that surviving original would then beat the
+                // user's chosen winner at runtime. SwapKey::isRealConflict() is what keeps these
+                // identical-across-files candidates out of the conflict table.
                 auto& candidates = result[idx].candidates;
-                if (!ranges::any_of(candidates, [&](const SwapEntry& e) { return e.line == line; })) {
+                if (!ranges::any_of(candidates,
+                        [&](const SwapEntry& e) { return e.line == line && e.sourceFile == fileName; })) {
                     candidates.push_back(SwapEntry {fileName, line});
                 }
             }
@@ -478,6 +485,15 @@ auto BOSIniMerger::merge(const vector<SwapKey>& keys, const fs::path& outputFold
     });
 
     for (const auto& name : sourceFileNames) {
+        // A source mod can legitimately ship a file called AIO_SWAP.ini itself (the companion
+        // xEdit script "BOS AIO Patcher.pas" produces one). Its content has already been merged
+        // into the AIO_SWAP.ini written just above, which IS its stand-in - queueing a blank for
+        // it would target the same path twice: the blank would clobber the merged temp file, and
+        // the second rename of an already-consumed temp would fail, leaving the output folder with
+        // an AIO_SWAP.ini containing nothing but the blank marker.
+        if (StringUtil::toLowerW(StringUtil::utf8ToUtf16(name)) == L"aio_swap.ini") {
+            continue;
+        }
         writeTempFile(outputFolder / StringUtil::utf8ToUtf16(name),
             [](ostream& out) { out << BLANK_MARKER << "\n"; });
     }

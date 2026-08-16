@@ -68,10 +68,10 @@
       "type": "Type",
       "key": "Clé",
       "winner": "Gagnant",
-      "candidates": "Candidats"
+      "locations": "Lieux"
     },
     "selectHint": "Sélectionne un conflit ci-dessus pour le résoudre.",
-    "exclude": "Exclure cette clé de AIO_SWAP.ini",
+    "exclude": "Exclure cette clé de AIO_SWAP.ini (tous les lieux)",
     "excludedLabel": "(exclu)"
   }
 }

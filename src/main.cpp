@@ -71,7 +71,10 @@ void addArguments(CLI::App& app, BOSPriorityCLIArgs& args)
                    "When launched through MO2/Vortex's tool list, this transparently shows your "
                    "merged mod view.")
         ->required();
-    app.add_option("output", args.outputDir, "Output directory")->default_str("BOSPriority_Output");
+    // default_val, not default_str: the latter only changes the help text, leaving outputDir empty
+    // when the argument is omitted - which then fails in create_directories("") instead of using
+    // the default this has always advertised.
+    app.add_option("output", args.outputDir, "Output directory")->default_val("BOSPriority_Output");
     app.add_option("--file-priority", args.filePriority,
                    "*_SWAP.ini filenames, comma-separated, lowest priority first - fallback used "
                    "only for conflicting keys that have no saved decision (see the GUI's Manage "
@@ -84,7 +87,8 @@ void addArguments(CLI::App& app, BOSPriorityCLIArgs& args)
         ->default_val(false);
 }
 
-// Applied only to keys with no saved per-key decision (BOSIniMerger::applyDecisions already ran).
+// Runs BEFORE BOSIniMerger::applyDecisions, which then overwrites the selection for every key that
+// does have a saved per-key decision - so this only ends up deciding the keys that don't.
 void applyFilePriorityFallback(vector<SwapKey>& keys, const vector<string>& filePriority)
 {
     if (filePriority.empty()) {
@@ -151,8 +155,12 @@ auto runCLI(int argC, char** argV) -> int
         const auto conflictCount = ranges::count_if(keys, [](const auto& k) { return k.isRealConflict(); });
         spdlog::info("Found {} key(s), {} in conflict.", keys.size(), conflictCount);
 
-        BOSIniMerger::applyDecisions(keys, outputDir / BOS_PRIORITY_DECISIONS_FILE_NAME);
+        // Fallback first, saved decisions second: --file-priority is documented as applying only
+        // where there's no saved per-key decision, and applyDecisions() overwrites the selection
+        // for exactly the keys it does have one for. Running them the other way round let
+        // --file-priority silently override every explicit GUI decision instead.
         applyFilePriorityFallback(keys, args.filePriority);
+        BOSIniMerger::applyDecisions(keys, outputDir / BOS_PRIORITY_DECISIONS_FILE_NAME);
 
         const auto stats = BOSIniMerger::merge(keys, outputDir, args.dryRun);
         spdlog::info("{}: {} file(s) read, {} line(s) read, {} key(s) overridden by priority, {} line(s) {}.",

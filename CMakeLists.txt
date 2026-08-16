@@ -77,3 +77,13 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE ${wxWidgets_DEFINITIONS})
 
 # No VC Redist DLL copy step: CMAKE_MSVC_RUNTIME_LIBRARY above statically links the CRT into
 # the executable, so msvcp140/vcruntime140/concrt140/vccorlib140 aren't runtime dependencies.
+
+# BOSLocale reads its JSONs from a "BOSPriority_translations" folder next to the exe at runtime.
+# Copying them on every build keeps a locally built exe behaving like a packaged release - without
+# this the build output only ever has whatever was hand-copied there once, so an edited or newly
+# added translation key silently appears to do nothing when testing locally.
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/translations"
+        "$<TARGET_FILE_DIR:${PROJECT_NAME}>/BOSPriority_translations"
+    COMMENT "Copying translation files next to the executable")

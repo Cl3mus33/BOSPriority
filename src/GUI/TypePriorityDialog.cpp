@@ -1,4 +1,5 @@
 #include "GUI/TypePriorityDialog.hpp"
+#include "BOSLocale.hpp"
 
 #include <algorithm>
 
@@ -7,32 +8,43 @@ using namespace std;
 namespace {
 constexpr int ID_MOVE_UP = wxID_HIGHEST + 30;
 constexpr int ID_MOVE_DOWN = wxID_HIGHEST + 31;
-const wxString ALL_TYPES = "All Types";
+
+// Must stay byte-identical to ConflictTableDialog's own allTypesLabel(): it's both the displayed
+// entry and the map key that dialog looks the fallback ranking up by. Looked up per call rather
+// than stored in a static so an in-process language change is picked up (see main.cpp's loop).
+auto allTypesLabel() -> wxString
+{
+    return BOSTr("conflicts.allTypes", "All Types");
+}
 } // namespace
 
 TypePriorityDialog::TypePriorityDialog(wxWindow* parent, vector<string> allFiles, vector<wxString> types)
-    : wxDialog(parent, wxID_ANY, "Set Priority by Type", wxDefaultPosition, wxSize(560, 480),
-               wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
+    : wxDialog(parent, wxID_ANY, BOSTr("typePriority.title", "Set Priority by Type"), wxDefaultPosition,
+               wxSize(560, 480), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 {
-    m_priorities[ALL_TYPES] = std::move(allFiles);
-    m_currentType = ALL_TYPES;
+    m_priorities[allTypesLabel()] = std::move(allFiles);
+    m_currentType = allTypesLabel();
 
     auto* topSizer = new wxBoxSizer(wxVERTICAL);
 
     auto* introText = new wxStaticText(this, wxID_ANY,
-        "Rank every source file that appears in a real conflict. Applying this resolves every "
-        "conflict at once: whichever file is highest here that actually has a candidate for a "
-        "given conflict wins it. Pick a type below to set a different order just for that type - "
-        "otherwise \"All Types\" is used as the fallback for it.");
+        wxString::Format(BOSTr("typePriority.intro",
+                             "Rank every source file that appears in a real conflict, most trusted at the "
+                             "top. Applying this resolves every conflict at once: for each one, the "
+                             "highest-ranked file that actually has a line for it wins. Pick a type below "
+                             "to give just that type a different order - anything you don't customise "
+                             "falls back to \"%s\"."),
+            allTypesLabel()));
     introText->Wrap(520);
     topSizer->Add(introText, 0, wxALL, 10);
 
     auto* typeSizer = new wxBoxSizer(wxHORIZONTAL);
-    typeSizer->Add(new wxStaticText(this, wxID_ANY, "Type:"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    typeSizer->Add(new wxStaticText(this, wxID_ANY, BOSTr("typePriority.typeLabel", "Type:")), 0,
+                   wxALIGN_CENTER_VERTICAL | wxALL, 5);
     m_typeChoice = new wxChoice(this, wxID_ANY);
-    m_typeChoice->Append(ALL_TYPES);
+    m_typeChoice->Append(allTypesLabel());
     for (const auto& type : types) {
-        if (type != ALL_TYPES) {
+        if (type != allTypesLabel()) {
             m_typeChoice->Append(type);
         }
     }
@@ -45,8 +57,8 @@ TypePriorityDialog::TypePriorityDialog(wxWindow* parent, vector<string> allFiles
     listSizer->Add(m_orderList, 1, wxALL | wxEXPAND, 10);
 
     auto* buttonSizer = new wxBoxSizer(wxVERTICAL);
-    auto* upButton = new wxButton(this, ID_MOVE_UP, "Move Up");
-    auto* downButton = new wxButton(this, ID_MOVE_DOWN, "Move Down");
+    auto* upButton = new wxButton(this, ID_MOVE_UP, BOSTr("typePriority.moveUp", "Move Up"));
+    auto* downButton = new wxButton(this, ID_MOVE_DOWN, BOSTr("typePriority.moveDown", "Move Down"));
     buttonSizer->Add(upButton, 0, wxALL, 5);
     buttonSizer->Add(downButton, 0, wxALL, 5);
     listSizer->Add(buttonSizer, 0, wxALIGN_CENTER_VERTICAL);
@@ -90,7 +102,7 @@ void TypePriorityDialog::switchToType(const wxString& type)
     m_currentType = type;
     if (!m_priorities.contains(type)) {
         // Not customized yet - start from the current "All Types" order.
-        m_priorities[type] = m_priorities[ALL_TYPES];
+        m_priorities[type] = m_priorities[allTypesLabel()];
     }
     refreshListBox();
 }

@@ -48,21 +48,30 @@ struct SwapKey {
     /// offered for chance pools.
     bool excluded = false;
 
-    /// True only for an actual cross-mod disagreement: 2+ non-chance candidates from more than
-    /// one distinct source file. When 2+ non-identical, non-chance candidates all come from the
-    /// SAME file (a mod author declaring the same key twice - happens in the wild, e.g. a rolled
-    /// vs. unrolled rug variant left in by mistake), there is nothing to decide: BOS's own
-    /// line-by-line parsing already deterministically keeps whichever one is declared last in
-    /// that one file - exactly what selectedCandidate already defaults to - so it's excluded from
-    /// the conflict table just like a chance pool, just resolved differently under the hood (only
-    /// the winning line, not every candidate, ends up in the output).
+    /// True only for an actual cross-mod disagreement: 2+ non-chance candidates that come from
+    /// more than one distinct source file AND don't all say the same thing. Both halves are
+    /// needed, for different real-world reasons:
+    ///  - same file, different lines (a mod author declaring the same key twice - happens in the
+    ///    wild, e.g. a rolled vs. unrolled rug variant left in by mistake): nothing to decide,
+    ///    BOS's own line-by-line parsing already deterministically keeps whichever is declared
+    ///    last in that one file - exactly what selectedCandidate already defaults to.
+    ///  - different files, identical lines (two mods shipping the same swap, or the same ini
+    ///    redistributed under two names): also nothing to decide, every candidate produces the
+    ///    same output. They're still kept as separate candidates rather than deduplicated away,
+    ///    because merge() derives the set of files to blank from them - a file dropped here would
+    ///    keep its original ini live in the load order alongside AIO_SWAP.ini.
+    /// Either way it's excluded from the conflict table just like a chance pool, just resolved
+    /// differently under the hood (only the winning line, not every candidate, reaches the output).
     [[nodiscard]] auto isRealConflict() const -> bool
     {
         if (candidates.size() < 2 || isChancePool) {
             return false;
         }
-        return std::ranges::any_of(
+        const bool acrossFiles = std::ranges::any_of(
             candidates, [&](const SwapEntry& e) { return e.sourceFile != candidates.front().sourceFile; });
+        const bool linesDisagree
+            = std::ranges::any_of(candidates, [&](const SwapEntry& e) { return e.line != candidates.front().line; });
+        return acrossFiles && linesDisagree;
     }
 };
 

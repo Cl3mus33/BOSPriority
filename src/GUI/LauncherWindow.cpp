@@ -277,6 +277,15 @@ void LauncherWindow::performScan()
 {
     const fs::path gameDir(m_gamePathCtrl->GetValue().ToStdWstring());
 
+    // scan() blocks the event loop, and on a large modlist most of that time goes on building the
+    // EditorID index across every plugin in Data - long enough that the window would otherwise
+    // just look hung. Update() forces this line to actually paint before the scan starts.
+    log(BOSTr("log.scanning",
+        "Scanning Data\\ ... the first swap target that names an EditorID also has to index every "
+        "plugin in Data, which can take a while on a large modlist."));
+    m_logCtrl->Update();
+    const wxBusyCursor busyCursor;
+
     m_keys = BOSIniMerger::scan(gameDir);
     applySavedDecisions(m_keys);
 

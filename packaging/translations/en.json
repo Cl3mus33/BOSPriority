@@ -36,9 +36,11 @@
     "usvfsHint": "BOSPriority reads it exactly like the game would: if launched through MO2/Vortex, that path transparently shows your merged mod view; there is no need to separately resolve where your instance or mods folders live.",
     "pickGameLocation": "Pick a Game Location first.",
     "pickOutputLocation": "Pick an output folder first.",
+    "scanning": "Scanning Data\\ ... the first swap target that names an EditorID also has to index every plugin in Data, which can take a while on a large modlist.",
     "foundKeys": "Found %zu key(s), %lld in conflict.",
     "noConflictsHint": "No conflicts - BOS will already produce the correct result directly from these files, nothing needs generating. Generate is still there if you just want a single consolidated ini (e.g. to tidy up a modlist), but it's optional.",
     "decisionsSaved": "Conflict decisions updated and saved - remembered next time you scan this output folder.",
+    "decisionsSaveFailed": "Could not save conflict decisions: %s",
     "nothingToMerge": "Nothing to merge - Scan Mods first.",
     "resultLine": "%s: %d file(s) read, %d line(s) read, %d key(s) overridden by priority, %d line(s) %s.",
     "wrote": "Wrote %s",
@@ -61,17 +63,31 @@
   "conflicts": {
     "title": "Manage BOS Conflicts",
     "intro": "Only real conflicts are shown here - a key with only one line, or with chance-weighted variants (chanceR/S/L), is included as-is with nothing to decide. Pick which file wins each remaining conflict, or exclude a key entirely.",
+    "introLocations": "A key scoped to several BOS locations (e.g. Farmhouse04 in Falkreath vs. Riverwood) is shown as ONE row: pick which file wins and every location it covers is resolved in one go. A location the chosen file doesn't cover keeps its own default until you pick something else, or exclude it.",
+    "introLoadOrderTip": "Tip: the mod you pick as winner here should also be the one winning in your mod manager's own load order (its plugin, meshes, textures) - otherwise something else may quietly override what this swap points to. See the README for details.",
     "filterByType": "Filter by type:",
+    "setPriorityButton": "Set Priority by Type...",
     "allTypes": "All Types",
     "unknownType": "Unknown",
     "column": {
       "type": "Type",
       "key": "Key",
-      "winner": "Winner",
-      "candidates": "Candidates"
+      "locations": "Locations",
+      "winner": "Winner"
     },
     "selectHint": "Select a conflict above to resolve it.",
-    "exclude": "Exclude this key from AIO_SWAP.ini",
-    "excludedLabel": "(excluded)"
+    "locationsAffected": "  (%zu location(s) affected)",
+    "candidateWins": "%s  -  wins %zu of %zu location(s)",
+    "candidateTargetMissing": "  [warning: this file's swap target isn't defined by any plugin in Data - BOS would skip it]",
+    "exclude": "Exclude this key from AIO_SWAP.ini (every location)",
+    "excludedLabel": "(excluded)",
+    "winnerVaries": "(varies by location - %zu file(s))"
+  },
+  "typePriority": {
+    "title": "Set Priority by Type",
+    "intro": "Rank every source file that appears in a real conflict, most trusted at the top. Applying this resolves every conflict at once: for each one, the highest-ranked file that actually has a line for it wins. Pick a type below to give just that type a different order - anything you don't customise falls back to \"%s\".",
+    "typeLabel": "Type:",
+    "moveUp": "Move Up",
+    "moveDown": "Move Down"
   }
 }

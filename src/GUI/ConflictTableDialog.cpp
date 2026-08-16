@@ -1,4 +1,5 @@
 #include "GUI/ConflictTableDialog.hpp"
+#include "BOSLocale.hpp"
 #include "GUI/TypePriorityDialog.hpp"
 
 #include <algorithm>
@@ -8,48 +9,70 @@
 
 using namespace std;
 
+namespace {
+// Looked up fresh on every call rather than cached in a static: a language change rebuilds these
+// windows in-process (see main.cpp's relaunch loop), so a value captured at first use would keep
+// showing the previous language. TypePriorityDialog reads the same key, so the two always agree -
+// getPriorities() is keyed by this exact string.
+auto allTypesLabel() -> wxString
+{
+    return BOSTr("conflicts.allTypes", "All Types");
+}
+} // namespace
+
 ConflictTableDialog::ConflictTableDialog(wxWindow* parent, vector<SwapKey> keys)
-    : wxDialog(parent, wxID_ANY, "Manage BOS Conflicts", wxDefaultPosition, wxSize(820, 640),
-               wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
+    : wxDialog(parent, wxID_ANY, BOSTr("conflicts.title", "Manage BOS Conflicts"), wxDefaultPosition,
+               wxSize(820, 640), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
     , m_keys(std::move(keys))
 {
     auto* topSizer = new wxBoxSizer(wxVERTICAL);
 
     auto* introText = new wxStaticText(this, wxID_ANY,
-        "Only real conflicts are shown here - a key with only one line, or with chance-weighted "
-        "variants (chanceR/S/L), is included as-is with nothing to decide. A key scoped to several "
-        "BOS locations (e.g. Farmhouse04 in Falkreath vs. Riverwood) is shown as ONE row: pick "
-        "which file wins and every location it covers is resolved in one go. A location the chosen "
-        "file doesn't cover keeps its own default until you pick something else, or exclude it.\n\n"
-        "Tip: the mod you pick as winner here should also be the one winning in your mod manager's "
-        "own load order (its plugin, meshes, textures) - otherwise something else may quietly "
-        "override what this swap points to. See the README for details.");
+        BOSTr("conflicts.intro",
+            "Only real conflicts are shown here - a key with only one line, or with chance-weighted "
+            "variants (chanceR/S/L), is included as-is with nothing to decide. Pick which file wins "
+            "each remaining conflict, or exclude a key entirely.")
+            + "\n\n"
+            + BOSTr("conflicts.introLocations",
+                "A key scoped to several BOS locations (e.g. Farmhouse04 in Falkreath vs. Riverwood) is "
+                "shown as ONE row: pick which file wins and every location it covers is resolved in one "
+                "go. A location the chosen file doesn't cover keeps its own default until you pick "
+                "something else, or exclude it.")
+            + "\n\n"
+            + BOSTr("conflicts.introLoadOrderTip",
+                "Tip: the mod you pick as winner here should also be the one winning in your mod "
+                "manager's own load order (its plugin, meshes, textures) - otherwise something else may "
+                "quietly override what this swap points to. See the README for details."));
     introText->Wrap(780);
     topSizer->Add(introText, 0, wxALL, 10);
 
     auto* filterSizer = new wxBoxSizer(wxHORIZONTAL);
-    filterSizer->Add(new wxStaticText(this, wxID_ANY, "Filter by type:"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    filterSizer->Add(new wxStaticText(this, wxID_ANY, BOSTr("conflicts.filterByType", "Filter by type:")), 0,
+                     wxALIGN_CENTER_VERTICAL | wxALL, 5);
     m_typeFilter = new wxChoice(this, wxID_ANY);
     filterSizer->Add(m_typeFilter, 0, wxALL, 5);
-    auto* priorityButton = new wxButton(this, wxID_ANY, "Set Priority by Type...");
+    auto* priorityButton
+        = new wxButton(this, wxID_ANY, BOSTr("conflicts.setPriorityButton", "Set Priority by Type..."));
     filterSizer->Add(priorityButton, 0, wxALL, 5);
     topSizer->Add(filterSizer, 0);
 
     m_listCtrl = new wxListCtrl(this, wxID_ANY, wxDefaultPosition, wxSize(-1, 260),
                                  wxLC_REPORT | wxLC_SINGLE_SEL);
-    m_listCtrl->InsertColumn(0, "Type", wxLIST_FORMAT_LEFT, 90);
-    m_listCtrl->InsertColumn(1, "Key", wxLIST_FORMAT_LEFT, 170);
-    m_listCtrl->InsertColumn(2, "Locations", wxLIST_FORMAT_LEFT, 80);
-    m_listCtrl->InsertColumn(3, "Winner", wxLIST_FORMAT_LEFT, 300);
+    m_listCtrl->InsertColumn(0, BOSTr("conflicts.column.type", "Type"), wxLIST_FORMAT_LEFT, 90);
+    m_listCtrl->InsertColumn(1, BOSTr("conflicts.column.key", "Key"), wxLIST_FORMAT_LEFT, 170);
+    m_listCtrl->InsertColumn(2, BOSTr("conflicts.column.locations", "Locations"), wxLIST_FORMAT_LEFT, 80);
+    m_listCtrl->InsertColumn(3, BOSTr("conflicts.column.winner", "Winner"), wxLIST_FORMAT_LEFT, 300);
     topSizer->Add(m_listCtrl, 1, wxALL | wxEXPAND, 10);
 
-    m_detailKeyLabel = new wxStaticText(this, wxID_ANY, "Select a conflict above to resolve it.");
+    m_detailKeyLabel
+        = new wxStaticText(this, wxID_ANY, BOSTr("conflicts.selectHint", "Select a conflict above to resolve it."));
     wxFont boldFont = m_detailKeyLabel->GetFont();
     boldFont.SetWeight(wxFONTWEIGHT_BOLD);
     m_detailKeyLabel->SetFont(boldFont);
     topSizer->Add(m_detailKeyLabel, 0, wxLEFT | wxRIGHT | wxTOP, 10);
 
-    m_excludeCheck = new wxCheckBox(this, wxID_ANY, "Exclude this key from AIO_SWAP.ini (every location)");
+    m_excludeCheck = new wxCheckBox(
+        this, wxID_ANY, BOSTr("conflicts.exclude", "Exclude this key from AIO_SWAP.ini (every location)"));
     m_excludeCheck->Enable(false);
     topSizer->Add(m_excludeCheck, 0, wxALL, 10);
 
@@ -108,7 +131,7 @@ void ConflictTableDialog::buildGroups()
 
     for (auto& group : m_groups) {
         if (group.typeLabel.IsEmpty()) {
-            group.typeLabel = "Unknown";
+            group.typeLabel = BOSTr("conflicts.unknownType", "Unknown");
         }
     }
 }
@@ -121,7 +144,7 @@ void ConflictTableDialog::rebuildTypeFilterChoices()
     }
 
     m_typeFilter->Clear();
-    m_typeFilter->Append("All Types");
+    m_typeFilter->Append(allTypesLabel());
     for (const auto& type : types) {
         m_typeFilter->Append(type);
     }
@@ -142,12 +165,12 @@ auto ConflictTableDialog::winnerLabelFor(const KeyGroup& group) const -> wxStrin
     }
 
     if (!anyIncluded) {
-        return "(excluded)";
+        return BOSTr("conflicts.excludedLabel", "(excluded)");
     }
     if (winners.size() == 1) {
         return wxString(*winners.begin());
     }
-    return wxString::Format("(varies by location - %zu file(s))", winners.size());
+    return wxString::Format(BOSTr("conflicts.winnerVaries", "(varies by location - %zu file(s))"), winners.size());
 }
 
 void ConflictTableDialog::rebuildList()
@@ -160,7 +183,7 @@ void ConflictTableDialog::rebuildList()
 
     for (size_t i = 0; i < m_groups.size(); ++i) {
         const auto& group = m_groups[i];
-        if (filter != "All Types" && filter != group.typeLabel) {
+        if (filter != allTypesLabel() && filter != group.typeLabel) {
             continue;
         }
 
@@ -175,7 +198,7 @@ void ConflictTableDialog::rebuildList()
 
 void ConflictTableDialog::clearDetail()
 {
-    m_detailKeyLabel->SetLabel("Select a conflict above to resolve it.");
+    m_detailKeyLabel->SetLabel(BOSTr("conflicts.selectHint", "Select a conflict above to resolve it."));
     m_excludeCheck->SetValue(false);
     m_excludeCheck->Enable(false);
     m_radioSizer->Clear(true); // destroys the previous group's radio buttons too
@@ -194,8 +217,9 @@ void ConflictTableDialog::showDetailFor(int listRow)
     const size_t groupIdx = m_rowToGroupIndex[static_cast<size_t>(listRow)];
     const auto& group = m_groups[groupIdx];
 
-    m_detailKeyLabel->SetLabel(
-        wxString(group.key) + wxString::Format("  (%zu location(s) affected)", group.memberIndices.size()));
+    m_detailKeyLabel->SetLabel(wxString(group.key)
+        + wxString::Format(BOSTr("conflicts.locationsAffected", "  (%zu location(s) affected)"),
+            group.memberIndices.size()));
 
     const bool allExcluded = ranges::all_of(group.memberIndices, [&](size_t idx) { return m_keys[idx].excluded; });
     m_excludeCheck->Enable(true);
@@ -241,12 +265,13 @@ void ConflictTableDialog::showDetailFor(int listRow)
             }
         }
 
-        wxString label = wxString::Format(
-            "%s  -  wins %zu/%zu location(s) if chosen", wxString(file), coversCount, group.memberIndices.size());
+        wxString label = wxString::Format(BOSTr("conflicts.candidateWins", "%s  -  wins %zu of %zu location(s)"),
+            wxString(file), coversCount, group.memberIndices.size());
         if (anyTargetMissing) {
             // BOS silently skips a swap whose target isn't defined by any active plugin - picking
             // this file as winner wouldn't actually change anything in-game for that location.
-            label += "  [warning: swap target not found in Data - may never apply]";
+            label += BOSTr("conflicts.candidateTargetMissing",
+                "  [warning: this file's swap target isn't defined by any plugin in Data - BOS would skip it]");
         }
         auto* radio = new wxRadioButton(m_radioPanel, wxID_ANY, label, wxDefaultPosition, wxDefaultSize,
                                          i == 0 ? wxRB_GROUP : 0);
@@ -356,16 +381,30 @@ void ConflictTableDialog::onSetPriorityByType(wxCommandEvent& /*event*/)
     for (auto& group : m_groups) {
         auto it = priorities.find(group.typeLabel);
         if (it == priorities.end()) {
-            it = priorities.find("All Types");
+            it = priorities.find(allTypesLabel());
         }
         if (it == priorities.end()) {
             continue;
         }
 
-        for (const auto& file : it->second) {
-            if (ranges::find(group.distinctFiles, file) != group.distinctFiles.end()) {
-                applyWinnerFile(group, file);
-                break;
+        // Resolved per location, not once per group: the highest-ranked file often only has a
+        // candidate for some of a key's locations, and the rest should fall through to the next
+        // ranked file that does - applying the group's single best file and leaving the remaining
+        // locations on BOS's alphabetical default would ignore the ranking exactly where it was
+        // needed most. An explicitly excluded location is left excluded: that's a deliberate
+        // decision the user made per key, not something a file ranking should silently undo.
+        for (const size_t idx : group.memberIndices) {
+            auto& swapKey = m_keys[idx];
+            if (swapKey.excluded) {
+                continue;
+            }
+            for (const auto& file : it->second) {
+                const auto candidate = ranges::find_if(
+                    swapKey.candidates, [&](const SwapEntry& e) { return e.sourceFile == file; });
+                if (candidate != swapKey.candidates.end()) {
+                    swapKey.selectedCandidate = static_cast<int>(candidate - swapKey.candidates.begin());
+                    break;
+                }
             }
         }
     }
