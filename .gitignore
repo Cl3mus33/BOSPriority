@@ -12,3 +12,4 @@ vcpkg_installed/
 # Runtime-generated, contains local machine paths - never ship/commit these
 BOSPriority_settings.json
 BOSPriority_decisions.json
+BOSPriority_priorities.json
