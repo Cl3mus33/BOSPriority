@@ -86,7 +86,8 @@
     "selectHint": "Select a conflict above to resolve it.",
     "locationsAffected": "  (%zu location(s) affected)",
     "locationsLabel": "Locations: ",
-    "orderItemCoverage": "%s  (covers %zu of %zu location(s))",
+    "orderLabel": "Priority order - #1 (top) wins first:",
+    "orderItemCoverage": "#%zu  %s  (covers %zu of %zu location(s))",
     "resolutionPreview": "Resolution preview:",
     "candidateTargetMissing": "  [warning: this file's swap target isn't defined by any plugin in Data - BOS would skip it]",
     "exclude": "Exclude this key from AIO_SWAP.ini (every location)",
@@ -97,6 +98,7 @@
     "title": "Set Priority by Type",
     "intro": "Rank every source file that appears in a real conflict, most trusted at the top. Applying this resolves every conflict at once: for each one, the highest-ranked file that actually has a line for it wins. Pick a type below to give just that type a different order - anything you don't customise falls back to \"%s\". Your ranking is remembered for this output folder and reapplied automatically on your next scan.",
     "typeLabel": "Type:",
+    "orderLabel": "Priority order - #1 (top) wins first:",
     "moveUp": "Move Up",
     "moveDown": "Move Down"
   }

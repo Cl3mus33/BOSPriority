@@ -78,6 +78,10 @@ TypePriorityDialog::TypePriorityDialog(wxWindow* parent, vector<string> allFiles
     typeSizer->Add(m_typeChoice, 0, wxALL, 5);
     topSizer->Add(typeSizer, 0);
 
+    auto* orderLabel = new wxStaticText(
+        this, wxID_ANY, BOSTr("typePriority.orderLabel", "Priority order - #1 (top) wins first:"));
+    topSizer->Add(orderLabel, 0, wxLEFT | wxRIGHT | wxTOP, 10);
+
     auto* listSizer = new wxBoxSizer(wxHORIZONTAL);
     m_orderList = new wxListBox(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, nullptr, wxLB_SINGLE);
     listSizer->Add(m_orderList, 1, wxALL | wxEXPAND, 10);
@@ -108,8 +112,13 @@ TypePriorityDialog::TypePriorityDialog(wxWindow* parent, vector<string> allFiles
 void TypePriorityDialog::refreshListBox()
 {
     m_orderList->Clear();
-    for (const auto& file : m_priorities[m_currentType]) {
-        m_orderList->Append(file);
+    const auto& order = m_priorities[m_currentType];
+    for (size_t i = 0; i < order.size(); ++i) {
+        // Numbered explicitly (#1 = top = highest priority) - without it, nothing in the list
+        // says which end wins. The real file name lives in the item's client data, not the
+        // displayed text, so the number never needs stripping back out when reading it.
+        const wxString label = wxString::Format("#%zu  %s", i + 1, wxString(order[i]));
+        m_orderList->Append(label, new wxStringClientData(order[i]));
     }
 }
 
@@ -117,7 +126,8 @@ void TypePriorityDialog::saveCurrentListToPriorities()
 {
     vector<string> order;
     for (unsigned i = 0; i < m_orderList->GetCount(); ++i) {
-        order.push_back(m_orderList->GetString(i).ToStdString());
+        auto* data = dynamic_cast<wxStringClientData*>(m_orderList->GetClientObject(i));
+        order.push_back(data != nullptr ? data->GetData().ToStdString() : string());
     }
     m_priorities[m_currentType] = std::move(order);
 }

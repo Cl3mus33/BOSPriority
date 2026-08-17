@@ -47,6 +47,10 @@ private:
     void rebuildList();
     void showDetailFor(int listRow);
     void clearDetail();
+    /// Rebuilds m_orderList to show exactly `order` (file names), numbered #1 (top, highest
+    /// priority) onward - always rebuilt rather than mutated in place so the numbers shown are
+    /// never stale after a move.
+    void populateOrderList(const KeyGroup& group, const std::vector<std::string>& order);
     /// Seeds m_orderList for `group`: files ordered by how many of its non-excluded locations
     /// they currently win, most first - a sensible reconstruction of "what order got us here"
     /// rather than an arbitrary fixed order, since the exact order a user set in an earlier
@@ -63,6 +67,9 @@ private:
     /// stale - shared by the exclude checkbox and order-list handlers, which both need to know
     /// which group they're acting on.
     [[nodiscard]] auto selectedGroup() -> KeyGroup*;
+    /// Swaps the selected m_orderList item with its delta neighbor (-1 up, +1 down), re-resolves,
+    /// and refreshes both the resolution preview and the main list's Winner column.
+    void moveOrderSelection(int delta);
 
     void onTypeFilterChanged(wxCommandEvent& event);
     void onListSelectionChanged(wxListEvent& event);

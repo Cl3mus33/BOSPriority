@@ -92,6 +92,10 @@ ConflictTableDialog::ConflictTableDialog(wxWindow* parent, vector<SwapKey> keys,
     m_excludeCheck->Enable(false);
     topSizer->Add(m_excludeCheck, 0, wxALL, 10);
 
+    auto* orderLabel = new wxStaticText(
+        this, wxID_ANY, BOSTr("conflicts.orderLabel", "Priority order - #1 (top) wins first:"));
+    topSizer->Add(orderLabel, 0, wxLEFT | wxRIGHT | wxTOP, 10);
+
     auto* orderSizer = new wxBoxSizer(wxHORIZONTAL);
     m_orderList = new wxListBox(this, wxID_ANY, wxDefaultPosition, wxSize(-1, 110), 0, nullptr, wxLB_SINGLE);
     orderSizer->Add(m_orderList, 1, wxALL | wxEXPAND, 5);
@@ -253,6 +257,40 @@ auto ConflictTableDialog::selectedGroup() -> KeyGroup*
     return &m_groups[m_rowToGroupIndex[static_cast<size_t>(row)]];
 }
 
+void ConflictTableDialog::populateOrderList(const KeyGroup& group, const vector<string>& order)
+{
+    m_orderList->Clear();
+    for (size_t i = 0; i < order.size(); ++i) {
+        const auto& file = order[i];
+        size_t coversCount = 0;
+        bool anyTargetMissing = false;
+        for (const size_t idx : group.memberIndices) {
+            const auto& candidates = m_keys[idx].candidates;
+            const auto it = ranges::find_if(candidates, [&](const SwapEntry& e) { return e.sourceFile == file; });
+            if (it == candidates.end()) {
+                continue;
+            }
+            ++coversCount;
+            if (it->targetMissing) {
+                anyTargetMissing = true;
+            }
+        }
+
+        // Numbered explicitly (#1 = top = highest priority) - without it, nothing in the list
+        // itself says which end wins, and the group's actual highest-coverage file can end up
+        // last (and therefore never winning anything, if lower-numbered files already cover
+        // everything it does) with no visual explanation why.
+        wxString itemLabel = wxString::Format(
+            BOSTr("conflicts.orderItemCoverage", "#%zu  %s  (covers %zu of %zu location(s))"), i + 1,
+            wxString(file), coversCount, group.memberIndices.size());
+        if (anyTargetMissing) {
+            itemLabel += BOSTr("conflicts.candidateTargetMissing",
+                "  [warning: this file's swap target isn't defined by any plugin in Data - BOS would skip it]");
+        }
+        m_orderList->Append(itemLabel, new wxStringClientData(file));
+    }
+}
+
 void ConflictTableDialog::refreshOrderList(const KeyGroup& group)
 {
     // Seeded by how many of the group's non-excluded locations each file currently wins, most
@@ -278,30 +316,12 @@ void ConflictTableDialog::refreshOrderList(const KeyGroup& group)
     }
     ranges::stable_sort(fileWinCounts, [](const auto& a, const auto& b) { return a.second > b.second; });
 
-    m_orderList->Clear();
+    vector<string> order;
+    order.reserve(fileWinCounts.size());
     for (const auto& [file, count] : fileWinCounts) {
-        size_t coversCount = 0;
-        bool anyTargetMissing = false;
-        for (const size_t idx : group.memberIndices) {
-            const auto& candidates = m_keys[idx].candidates;
-            const auto it = ranges::find_if(candidates, [&](const SwapEntry& e) { return e.sourceFile == file; });
-            if (it == candidates.end()) {
-                continue;
-            }
-            ++coversCount;
-            if (it->targetMissing) {
-                anyTargetMissing = true;
-            }
-        }
-
-        wxString itemLabel = wxString::Format(BOSTr("conflicts.orderItemCoverage", "%s  (covers %zu of %zu location(s))"),
-            wxString(file), coversCount, group.memberIndices.size());
-        if (anyTargetMissing) {
-            itemLabel += BOSTr("conflicts.candidateTargetMissing",
-                "  [warning: this file's swap target isn't defined by any plugin in Data - BOS would skip it]");
-        }
-        m_orderList->Append(itemLabel, new wxStringClientData(file));
+        order.push_back(file);
     }
+    populateOrderList(group, order);
 }
 
 void ConflictTableDialog::applyCurrentOrder(const KeyGroup& group)
@@ -426,57 +446,47 @@ void ConflictTableDialog::onExcludeToggled(wxCommandEvent& /*event*/)
     }
 }
 
-namespace {
-void moveListBoxItem(wxListBox* list, int selection, int target)
-{
-    const wxString label = list->GetString(static_cast<unsigned>(selection));
-    auto* data = dynamic_cast<wxStringClientData*>(list->GetClientObject(static_cast<unsigned>(selection)));
-    const wxString value = data != nullptr ? data->GetData() : wxString();
-
-    list->Delete(static_cast<unsigned>(selection));
-    list->Insert(label, static_cast<unsigned>(target), new wxStringClientData(value));
-    list->SetSelection(target);
-}
-} // namespace
-
-void ConflictTableDialog::onOrderMoveUp(wxCommandEvent& /*event*/)
+void ConflictTableDialog::moveOrderSelection(int delta)
 {
     const int selection = m_orderList->GetSelection();
-    if (selection == wxNOT_FOUND || selection == 0) {
+    const int target = selection + delta;
+    if (selection == wxNOT_FOUND || target < 0 || target >= static_cast<int>(m_orderList->GetCount())) {
         return;
     }
-    moveListBoxItem(m_orderList, selection, selection - 1);
 
     auto* group = selectedGroup();
     if (group == nullptr) {
         return;
     }
+
+    vector<string> order;
+    for (unsigned i = 0; i < m_orderList->GetCount(); ++i) {
+        auto* data = dynamic_cast<wxStringClientData*>(m_orderList->GetClientObject(i));
+        order.push_back(data != nullptr ? data->GetData().ToStdString() : string());
+    }
+    swap(order[static_cast<size_t>(selection)], order[static_cast<size_t>(target)]);
+
+    // Rebuilt (not swapped in place) so every item's "#N" prefix is recomputed - an in-place swap
+    // would leave the two moved items carrying each other's stale number.
+    populateOrderList(*group, order);
+    m_orderList->SetSelection(target);
+
     applyCurrentOrder(*group);
     refreshResolutionSummary(*group);
     const long row = m_listCtrl->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
     if (row >= 0) {
         m_listCtrl->SetItem(row, 3, winnerLabelFor(*group));
     }
+}
+
+void ConflictTableDialog::onOrderMoveUp(wxCommandEvent& /*event*/)
+{
+    moveOrderSelection(-1);
 }
 
 void ConflictTableDialog::onOrderMoveDown(wxCommandEvent& /*event*/)
 {
-    const int selection = m_orderList->GetSelection();
-    if (selection == wxNOT_FOUND || static_cast<unsigned>(selection) + 1 >= m_orderList->GetCount()) {
-        return;
-    }
-    moveListBoxItem(m_orderList, selection, selection + 1);
-
-    auto* group = selectedGroup();
-    if (group == nullptr) {
-        return;
-    }
-    applyCurrentOrder(*group);
-    refreshResolutionSummary(*group);
-    const long row = m_listCtrl->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
-    if (row >= 0) {
-        m_listCtrl->SetItem(row, 3, winnerLabelFor(*group));
-    }
+    moveOrderSelection(1);
 }
 
 void ConflictTableDialog::onSetPriorityByType(wxCommandEvent& /*event*/)
