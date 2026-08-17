@@ -66,6 +66,11 @@ LauncherWindow::LauncherWindow(const InitParams& initParams)
                wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
     , m_theme(initParams.theme)
 {
+    // IDI_APPICON is embedded via packaging/icon/BOSPriority.rc, which also makes it the exe's own
+    // icon in Explorer/the taskbar automatically - this just additionally puts it in the title bar,
+    // which a wxDialog (unlike wxFrame) doesn't pick up on its own.
+    SetIcon(wxIcon("IDI_APPICON"));
+
     auto* mainSizer = new wxBoxSizer(wxVERTICAL);
 
     auto* headerPanel = new wxPanel(this);

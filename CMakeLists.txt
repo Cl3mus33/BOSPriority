@@ -49,9 +49,12 @@ file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/*.cpp)
 # Plain console subsystem (same as AutoSeasons/CMakeLists.txt) - the GUI still opens fine from a
 # console-subsystem exe, and CLI/automation use (spdlog output, --help, etc.) needs the console
 # that a WIN32-subsystem exe wouldn't have without extra AllocConsole plumbing.
+# packaging/icon/BOSPriority.rc embeds the app icon (taskbar, Explorer, Alt-Tab, title bar) -
+# MSVC's resource compiler picks up a .rc source automatically once it's part of the target.
 add_executable(${PROJECT_NAME}
     ${SOURCES}
     ${HEADERS}
+    packaging/icon/BOSPriority.rc
 )
 target_compile_options(${PROJECT_NAME} PRIVATE /utf-8)
 target_include_directories(${PROJECT_NAME} PUBLIC include)

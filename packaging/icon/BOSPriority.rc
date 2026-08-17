@@ -1,0 +1,4 @@
+// Windows resource script - embeds the app icon into the exe (taskbar, Explorer, Alt-Tab, the
+// window's own title bar icon). Referenced by CMakeLists.txt as a source of the exe target; MSVC's
+// resource compiler (rc.exe) picks it up automatically.
+IDI_APPICON ICON "BOSPriority.ico"
