@@ -34,10 +34,14 @@ auto locationLabel(const string& section) -> string
 
 ConflictTableDialog::ConflictTableDialog(wxWindow* parent, vector<SwapKey> keys, filesystem::path outputDir)
     : wxDialog(parent, wxID_ANY, BOSTr("conflicts.title", "Manage BOS Conflicts"), wxDefaultPosition,
-               wxSize(820, 680), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
+               wxSize(860, 760), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
     , m_keys(std::move(keys))
     , m_outputDir(std::move(outputDir))
 {
+    // The detail panel's content (locations list, resolution preview) varies a lot with how many
+    // locations a key spans - a taller default plus a floor on how far wxRESIZE_BORDER can shrink
+    // it keeps that content from getting cramped or clipped for a key with many locations.
+    SetMinSize(wxSize(700, 600));
     auto* topSizer = new wxBoxSizer(wxVERTICAL);
 
     auto* introText = new wxStaticText(this, wxID_ANY,
@@ -125,11 +129,17 @@ ConflictTableDialog::ConflictTableDialog(wxWindow* parent, vector<SwapKey> keys,
     m_excludeCheck->Bind(wxEVT_CHECKBOX, &ConflictTableDialog::onExcludeToggled, this);
     m_moveUpButton->Bind(wxEVT_BUTTON, &ConflictTableDialog::onOrderMoveUp, this);
     m_moveDownButton->Bind(wxEVT_BUTTON, &ConflictTableDialog::onOrderMoveDown, this);
+    m_orderList->Bind(wxEVT_MOTION, &ConflictTableDialog::onOrderListMotion, this);
     priorityButton->Bind(wxEVT_BUTTON, &ConflictTableDialog::onSetPriorityByType, this);
 
     buildGroups();
     rebuildTypeFilterChoices();
     rebuildList();
+
+    // wxDefaultPosition can otherwise leave this dialog offset from LauncherWindow in a way that
+    // looks like the parent window is bleeding through around its edges - always center it on the
+    // parent explicitly instead of trusting the platform default.
+    CentreOnParent();
 }
 
 void ConflictTableDialog::buildGroups()
@@ -245,6 +255,7 @@ void ConflictTableDialog::clearDetail()
     m_excludeCheck->SetValue(false);
     m_excludeCheck->Enable(false);
     m_orderList->Clear();
+    m_hoveredOrderItem = wxNOT_FOUND;
     m_orderList->Enable(false);
     m_moveUpButton->Enable(false);
     m_moveDownButton->Enable(false);
@@ -263,6 +274,7 @@ auto ConflictTableDialog::selectedGroup() -> KeyGroup*
 void ConflictTableDialog::populateOrderList(const KeyGroup& group, const vector<string>& order)
 {
     m_orderList->Clear();
+    m_hoveredOrderItem = wxNOT_FOUND; // item indices are being rebuilt - any cached tooltip is stale
     for (size_t i = 0; i < order.size(); ++i) {
         const auto& file = order[i];
         size_t coversCount = 0;
@@ -493,6 +505,51 @@ void ConflictTableDialog::onOrderMoveUp(wxCommandEvent& /*event*/)
 void ConflictTableDialog::onOrderMoveDown(wxCommandEvent& /*event*/)
 {
     moveOrderSelection(1);
+}
+
+void ConflictTableDialog::onOrderListMotion(wxMouseEvent& event)
+{
+    event.Skip(); // let wx keep handling normal mouse-move bookkeeping (hover highlight, etc.)
+
+    const int item = m_orderList->HitTest(event.GetPosition());
+    if (item == m_hoveredOrderItem) {
+        return; // still over the same item (or still off-list) - nothing to recompute
+    }
+    m_hoveredOrderItem = item;
+
+    if (item == wxNOT_FOUND) {
+        m_orderList->UnsetToolTip();
+        return;
+    }
+
+    auto* data = dynamic_cast<wxStringClientData*>(m_orderList->GetClientObject(static_cast<unsigned>(item)));
+    auto* group = selectedGroup();
+    if (data == nullptr || group == nullptr) {
+        m_orderList->UnsetToolTip();
+        return;
+    }
+
+    const string file = data->GetData().ToStdString();
+    vector<string> covered;
+    for (const size_t idx : group->memberIndices) {
+        const auto& candidates = m_keys[idx].candidates;
+        if (ranges::any_of(candidates, [&](const SwapEntry& e) { return e.sourceFile == file; })) {
+            covered.push_back(locationLabel(m_keys[idx].section));
+        }
+    }
+
+    wxString tooltip = BOSTr("conflicts.orderItemTooltipPrefix", "Covers: ");
+    if (covered.empty()) {
+        tooltip = BOSTr("conflicts.orderItemTooltipNone", "Doesn't cover any location in this key.");
+    } else {
+        for (size_t i = 0; i < covered.size(); ++i) {
+            if (i > 0) {
+                tooltip += ", ";
+            }
+            tooltip += covered[i];
+        }
+    }
+    m_orderList->SetToolTip(tooltip);
 }
 
 void ConflictTableDialog::onSetPriorityByType(wxCommandEvent& /*event*/)

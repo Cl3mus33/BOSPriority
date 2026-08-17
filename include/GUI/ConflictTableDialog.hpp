@@ -78,6 +78,9 @@ private:
     void onExcludeToggled(wxCommandEvent& event);
     void onOrderMoveUp(wxCommandEvent& event);
     void onOrderMoveDown(wxCommandEvent& event);
+    /// Updates m_orderList's tooltip to name the locations the hovered file covers within the
+    /// selected group - the item label only has room for a count.
+    void onOrderListMotion(wxMouseEvent& event);
     void onSetPriorityByType(wxCommandEvent& event);
 
     std::vector<SwapKey> m_keys; // full set, edited in place
@@ -92,6 +95,7 @@ private:
     wxStaticText* m_detailLocationsLabel = nullptr; // lists every location name in the selected group
     wxCheckBox* m_excludeCheck = nullptr;
     wxListBox* m_orderList = nullptr; // the selected group's candidate files, in resolution order
+    int m_hoveredOrderItem = wxNOT_FOUND; // last item onOrderListMotion set a tooltip for
     wxButton* m_moveUpButton = nullptr;
     wxButton* m_moveDownButton = nullptr;
     wxStaticText* m_resolutionSummaryLabel = nullptr; // live "Location -> resolved file" preview

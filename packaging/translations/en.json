@@ -89,6 +89,8 @@
     "orderLabel": "Priority order - #1 (bottom) wins, same as your mod manager's own list:",
     "orderItemCoverage": "#%zu  %s  (covers %zu of %zu location(s))",
     "resolutionPreview": "Resolution preview:",
+    "orderItemTooltipPrefix": "Covers: ",
+    "orderItemTooltipNone": "Doesn't cover any location in this key.",
     "candidateTargetMissing": "  [warning: this file's swap target isn't defined by any plugin in Data - BOS would skip it]",
     "exclude": "Exclude this key from AIO_SWAP.ini (every location)",
     "excludedLabel": "(excluded)",
