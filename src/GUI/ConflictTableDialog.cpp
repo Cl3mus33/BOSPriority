@@ -10,6 +10,26 @@
 
 using namespace std;
 
+namespace {
+// scan() explodes a multi-location BOS section into one display section per location (see
+// BOSIniMerger.hpp's doc comment), so a member's own .section is already a single-location string
+// like "[Forms|FalkreathLocation]" - this just strips the "[Prefix|" / "]" wrapper for display,
+// leaving "FalkreathLocation". An unfiltered section ("[Forms]", no '|') is shown as-is - it isn't
+// a location at all, but naming it beats silently omitting that member from the list.
+auto locationLabel(const string& section) -> string
+{
+    const auto pipePos = section.find('|');
+    if (pipePos == string::npos) {
+        return section;
+    }
+    string inner = section.substr(pipePos + 1);
+    if (!inner.empty() && inner.back() == ']') {
+        inner.pop_back();
+    }
+    return inner;
+}
+} // namespace
+
 ConflictTableDialog::ConflictTableDialog(wxWindow* parent, vector<SwapKey> keys, filesystem::path outputDir)
     : wxDialog(parent, wxID_ANY, BOSTr("conflicts.title", "Manage BOS Conflicts"), wxDefaultPosition,
                wxSize(820, 640), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
@@ -61,6 +81,9 @@ ConflictTableDialog::ConflictTableDialog(wxWindow* parent, vector<SwapKey> keys,
     boldFont.SetWeight(wxFONTWEIGHT_BOLD);
     m_detailKeyLabel->SetFont(boldFont);
     topSizer->Add(m_detailKeyLabel, 0, wxLEFT | wxRIGHT | wxTOP, 10);
+
+    m_detailLocationsLabel = new wxStaticText(this, wxID_ANY, wxString());
+    topSizer->Add(m_detailLocationsLabel, 0, wxLEFT | wxRIGHT | wxTOP, 10);
 
     m_excludeCheck = new wxCheckBox(
         this, wxID_ANY, BOSTr("conflicts.exclude", "Exclude this key from AIO_SWAP.ini (every location)"));
@@ -198,6 +221,7 @@ void ConflictTableDialog::rebuildList()
 void ConflictTableDialog::clearDetail()
 {
     m_detailKeyLabel->SetLabel(BOSTr("conflicts.selectHint", "Select a conflict above to resolve it."));
+    m_detailLocationsLabel->SetLabel(wxString());
     m_excludeCheck->SetValue(false);
     m_excludeCheck->Enable(false);
     m_radioSizer->Clear(true); // destroys the previous group's radio buttons too
@@ -219,6 +243,20 @@ void ConflictTableDialog::showDetailFor(int listRow)
     m_detailKeyLabel->SetLabel(wxString(group.key)
         + wxString::Format(BOSTr("conflicts.locationsAffected", "  (%zu location(s) affected)"),
             group.memberIndices.size()));
+
+    vector<string> allLocationNames;
+    for (const size_t idx : group.memberIndices) {
+        allLocationNames.push_back(locationLabel(m_keys[idx].section));
+    }
+    wxString locationsList = BOSTr("conflicts.locationsLabel", "Locations: ");
+    for (size_t i = 0; i < allLocationNames.size(); ++i) {
+        if (i > 0) {
+            locationsList += ", ";
+        }
+        locationsList += allLocationNames[i];
+    }
+    m_detailLocationsLabel->SetLabel(locationsList);
+    m_detailLocationsLabel->Wrap(780); // re-wrap for this group's actual text - length varies a lot
 
     const bool allExcluded = ranges::all_of(group.memberIndices, [&](size_t idx) { return m_keys[idx].excluded; });
     m_excludeCheck->Enable(true);
@@ -252,6 +290,7 @@ void ConflictTableDialog::showDetailFor(int listRow)
         const auto& file = group.distinctFiles[i];
         size_t coversCount = 0;
         bool anyTargetMissing = false;
+        vector<string> coveredLocations;
         for (const size_t idx : group.memberIndices) {
             const auto& candidates = m_keys[idx].candidates;
             const auto it = ranges::find_if(candidates, [&](const SwapEntry& e) { return e.sourceFile == file; });
@@ -259,13 +298,22 @@ void ConflictTableDialog::showDetailFor(int listRow)
                 continue;
             }
             ++coversCount;
+            coveredLocations.push_back(locationLabel(m_keys[idx].section));
             if (it->targetMissing) {
                 anyTargetMissing = true;
             }
         }
 
-        wxString label = wxString::Format(BOSTr("conflicts.candidateWins", "%s  -  wins %zu of %zu location(s)"),
-            wxString(file), coversCount, group.memberIndices.size());
+        wxString coveredList;
+        for (size_t j = 0; j < coveredLocations.size(); ++j) {
+            if (j > 0) {
+                coveredList += ", ";
+            }
+            coveredList += coveredLocations[j];
+        }
+        wxString label = wxString::Format(
+            BOSTr("conflicts.candidateWins", "%s  -  wins %zu of %zu location(s): %s"), wxString(file), coversCount,
+            group.memberIndices.size(), coveredList);
         if (anyTargetMissing) {
             // BOS silently skips a swap whose target isn't defined by any active plugin - picking
             // this file as winner wouldn't actually change anything in-game for that location.

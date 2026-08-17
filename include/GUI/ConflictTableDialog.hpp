@@ -59,6 +59,7 @@ private:
     std::vector<wxString> m_typeFilterRawValues; // parallel to m_typeFilter's items
     wxListCtrl* m_listCtrl = nullptr;
     wxStaticText* m_detailKeyLabel = nullptr;
+    wxStaticText* m_detailLocationsLabel = nullptr; // lists every location name in the selected group
     wxCheckBox* m_excludeCheck = nullptr;
     wxPanel* m_radioPanel = nullptr;
     wxBoxSizer* m_radioSizer = nullptr;
