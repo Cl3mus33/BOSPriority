@@ -58,6 +58,10 @@
       "message": "Scanned automatically and found no conflicts - BOS will already produce the correct result directly from these files, nothing needs generating. Generating a single consolidated ini is still there if you want one (e.g. to tidy up a modlist), but it's entirely optional. Close BOSPriority?",
       "close": "Close BOSPriority",
       "keepOpen": "Keep Open"
+    },
+    "outputActive": {
+      "title": "Output mod appears to be active",
+      "message": "Found %d file(s) in Data that are BOSPriority's own previous output (blanked originals, or AIO_SWAP.ini). This almost always means your Output mod is currently enabled in your mod manager - while it is, BOSPriority only sees its own blanked files instead of the real ones, so this scan will find far fewer conflicts than actually exist (possibly none). Disable the Output mod, then scan again."
     }
   },
   "conflicts": {

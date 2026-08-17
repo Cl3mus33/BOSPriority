@@ -167,4 +167,13 @@ public:
     /// parsed.
     [[nodiscard]] static auto loadTypePriorities(const std::filesystem::path& rankingFile)
         -> std::map<std::string, std::vector<std::string>>;
+
+    /// Counts *_SWAP.ini files directly under <gameDir>/Data that carry one of this tool's own
+    /// markers (a blanked stand-in, or AIO_SWAP.ini itself). scan() already skips these safely -
+    /// they never show up as new source content - but a nonzero count almost always means the
+    /// Output mod is currently ENABLED in the mod manager's merged Data view: while it is, every
+    /// original source ini that generate() already blanked is masked by its own stand-in, so
+    /// scan() sees far fewer (often zero) conflicts than actually exist. Call this alongside
+    /// scan() to warn the user - mirrors PGPatcher's own "is the output active" check.
+    [[nodiscard]] static auto countActiveOutputFiles(const std::filesystem::path& gameDir) -> int;
 };

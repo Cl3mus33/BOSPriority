@@ -300,6 +300,24 @@ void LauncherWindow::performScan()
     applySavedTypePriorities(m_keys);
     applySavedDecisions(m_keys);
 
+    // scan() already safely ignores its own previous output (blanked stand-ins, AIO_SWAP.ini) -
+    // but if any showed up in Data at all, it almost certainly means the Output mod is currently
+    // ENABLED in the mod manager, masking every real source ini it already blanked. Left
+    // undetected this looks like "BOSPriority stopped finding conflicts" with no obvious cause.
+    if (const auto activeOutputCount = BOSIniMerger::countActiveOutputFiles(gameDir); activeOutputCount > 0) {
+        const wxString message = wxString::Format(
+            BOSTr("dialog.outputActive.message",
+                "Found %d file(s) in Data that are BOSPriority's own previous output (blanked "
+                "originals, or AIO_SWAP.ini). This almost always means your Output mod is currently "
+                "enabled in your mod manager - while it is, BOSPriority only sees its own blanked "
+                "files instead of the real ones, so this scan will find far fewer conflicts than "
+                "actually exist (possibly none). Disable the Output mod, then scan again."),
+            activeOutputCount);
+        log(message);
+        wxMessageBox(message, BOSTr("dialog.outputActive.title", "Output mod appears to be active"),
+                      wxOK | wxICON_WARNING, this);
+    }
+
     const auto conflictCount = countConflicts(m_keys);
     log(wxString::Format(BOSTr("log.foundKeys", "Found %zu key(s), %lld in conflict."), m_keys.size(), conflictCount));
     if (!m_keys.empty() && conflictCount == 0) {

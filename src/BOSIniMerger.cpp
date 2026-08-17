@@ -135,6 +135,27 @@ auto isOwnOutput(const fs::path& file) -> bool
     return firstLine.empty() || firstLine.starts_with(AIO_HEADER_MARKER) || firstLine == BLANK_MARKER;
 }
 
+// Narrower than isOwnOutput() above: true only if the file actually carries one of this tool's own
+// markers, NOT merely if it's empty (an empty *_SWAP.ini could just as easily belong to some other
+// mod). Used only for countActiveOutputFiles()'s diagnostic, where a false positive would produce
+// a misleading warning telling the user their Output mod is active when it might not be.
+auto isKnownBosPriorityOutput(const fs::path& file) -> bool
+{
+    ifstream f(file);
+    if (!f.is_open()) {
+        return false;
+    }
+    skipUtf8Bom(f);
+
+    string firstLine;
+    if (!getline(f, firstLine)) {
+        return false;
+    }
+
+    firstLine = trim(firstLine);
+    return firstLine.starts_with(AIO_HEADER_MARKER) || firstLine == BLANK_MARKER;
+}
+
 auto discoverSourceFiles(const fs::path& gameDir) -> vector<fs::path>
 {
     const auto dataDir = gameDir / L"Data";
@@ -653,4 +674,20 @@ auto BOSIniMerger::loadTypePriorities(const fs::path& rankingFile) -> map<string
         return {}; // corrupt/unreadable - treat like no saved ranking rather than fail the scan
     }
     return result;
+}
+
+auto BOSIniMerger::countActiveOutputFiles(const fs::path& gameDir) -> int
+{
+    const auto dataDir = gameDir / L"Data";
+    if (!fs::exists(dataDir) || !fs::is_directory(dataDir)) {
+        return 0;
+    }
+
+    int count = 0;
+    for (const auto& entry : fs::directory_iterator(dataDir)) {
+        if (entry.is_regular_file() && isBosSwapIniFile(entry.path()) && isKnownBosPriorityOutput(entry.path())) {
+            ++count;
+        }
+    }
+    return count;
 }
