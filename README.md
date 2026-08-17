@@ -75,6 +75,13 @@ themselves launch, same caveat as any other tool in this family (xEdit, AutoSeas
 7. Enable the output mod in your manager, placed after every mod that shipped a BOS ini it
    depends on - its emptied stand-ins need to load after the originals to take effect.
 
+> **Disable the output mod before your next Scan.** Once it's enabled, its blanked stand-ins sit
+> in the merged Data view under the same filenames as the real source inis, so a rescan sees mostly
+> its own already-blanked output instead of the mods it needs to read - conflicts you know exist
+> can disappear from the table entirely. BOSPriority detects this (a warning appears if it finds
+> its own output still present) and tells you to disable it, but it's simplest to just disable the
+> output mod any time you're about to rescan, and re-enable it once you're done.
+
 ### Keep your mod load order aligned with your BOS priority choices
 
 BOSPriority only resolves disagreements between `_SWAP.ini` files - it deliberately doesn't check
