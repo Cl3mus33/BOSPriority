@@ -155,10 +155,17 @@ auto runCLI(int argC, char** argV) -> int
         const auto conflictCount = ranges::count_if(keys, [](const auto& k) { return k.isRealConflict(); });
         spdlog::info("Found {} key(s), {} in conflict.", keys.size(), conflictCount);
 
-        // Fallback first, saved decisions second: --file-priority is documented as applying only
-        // where there's no saved per-key decision, and applyDecisions() overwrites the selection
-        // for exactly the keys it does have one for. Running them the other way round let
-        // --file-priority silently override every explicit GUI decision instead.
+        // Broadest to most specific, each later step overwriting exactly the keys it has an
+        // opinion on: a saved "Set Priority by Type" ranking (BOSPriority_priorities.json, set
+        // via the GUI) first, then --file-priority is documented as applying only where there's
+        // no saved per-key decision, and applyDecisions() overwrites the selection for exactly
+        // the keys it does have one for - running the last two the other way round let
+        // --file-priority silently override every explicit GUI decision instead. The CLI didn't
+        // apply the type ranking at all before this - a real gap, since it's the one persisted
+        // setting meant to keep resolving future conflicts automatically, exactly what CLI/
+        // automation use needs.
+        BOSIniMerger::applyTypePriorities(
+            keys, BOSIniMerger::loadTypePriorities(outputDir / BOS_PRIORITY_TYPE_RANKING_FILE_NAME));
         applyFilePriorityFallback(keys, args.filePriority);
         BOSIniMerger::applyDecisions(keys, outputDir / BOS_PRIORITY_DECISIONS_FILE_NAME);
 

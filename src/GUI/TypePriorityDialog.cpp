@@ -53,11 +53,12 @@ TypePriorityDialog::TypePriorityDialog(wxWindow* parent, vector<string> allFiles
     auto* introText = new wxStaticText(this, wxID_ANY,
         wxString::Format(BOSTr("typePriority.intro",
                              "Rank every source file that appears in a real conflict, most trusted at the "
-                             "top. Applying this resolves every conflict at once: for each one, the "
-                             "highest-ranked file that actually has a line for it wins. Pick a type below "
-                             "to give just that type a different order - anything you don't customise "
-                             "falls back to \"%s\". Your ranking is remembered for this output folder and "
-                             "reapplied automatically on your next scan."),
+                             "BOTTOM - same as your mod manager's own load order, where the lower entry "
+                             "overwrites the ones above it. Applying this resolves every conflict at once: "
+                             "for each one, the highest-ranked file that actually has a line for it wins. "
+                             "Pick a type below to give just that type a different order - anything you "
+                             "don't customise falls back to \"%s\". Your ranking is remembered for this "
+                             "output folder and reapplied automatically on your next scan."),
             conflictDisplayTypeLabel(CONFLICT_ALL_TYPES_KEY)));
     introText->Wrap(520);
     topSizer->Add(introText, 0, wxALL, 10);
@@ -78,8 +79,8 @@ TypePriorityDialog::TypePriorityDialog(wxWindow* parent, vector<string> allFiles
     typeSizer->Add(m_typeChoice, 0, wxALL, 5);
     topSizer->Add(typeSizer, 0);
 
-    auto* orderLabel = new wxStaticText(
-        this, wxID_ANY, BOSTr("typePriority.orderLabel", "Priority order - #1 (top) wins first:"));
+    auto* orderLabel = new wxStaticText(this, wxID_ANY,
+        BOSTr("typePriority.orderLabel", "Priority order - #1 (bottom) wins, same as your mod manager's own list:"));
     topSizer->Add(orderLabel, 0, wxLEFT | wxRIGHT | wxTOP, 10);
 
     auto* listSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -112,12 +113,13 @@ TypePriorityDialog::TypePriorityDialog(wxWindow* parent, vector<string> allFiles
 void TypePriorityDialog::refreshListBox()
 {
     m_orderList->Clear();
-    const auto& order = m_priorities[m_currentType];
+    const auto& order = m_priorities[m_currentType]; // index 0 = top of the on-screen list
     for (size_t i = 0; i < order.size(); ++i) {
-        // Numbered explicitly (#1 = top = highest priority) - without it, nothing in the list
-        // says which end wins. The real file name lives in the item's client data, not the
-        // displayed text, so the number never needs stripping back out when reading it.
-        const wxString label = wxString::Format("#%zu  %s", i + 1, wxString(order[i]));
+        // Numbered counting up from the bottom (#1 = bottom = wins, matching a mod manager's own
+        // load order) - without it, nothing in the list says which end wins. The real file name
+        // lives in the item's client data, not the displayed text, so the number never needs
+        // stripping back out when reading the list back into m_priorities.
+        const wxString label = wxString::Format("#%zu  %s", order.size() - i, wxString(order[i]));
         m_orderList->Append(label, new wxStringClientData(order[i]));
     }
 }

@@ -49,8 +49,10 @@ ConflictTableDialog::ConflictTableDialog(wxWindow* parent, vector<SwapKey> keys,
             + BOSTr("conflicts.introLocations",
                 "A key scoped to several BOS locations (e.g. Farmhouse04 in Falkreath vs. Riverwood) is "
                 "shown as ONE row, but rarely has one file covering every location. Rank the candidates "
-                "with Move Up/Down: each location independently takes the highest-ranked file that "
-                "actually has a line for it, shown live in the resolution preview below the list.")
+                "with Move Up/Down - the file at the BOTTOM wins, same as your mod manager's own load "
+                "order (lower overwrites higher): each location independently takes the highest-ranked "
+                "file that actually has a line for it, shown live in the resolution preview below the "
+                "list.")
             + "\n\n"
             + BOSTr("conflicts.introLoadOrderTip",
                 "Tip: the mod you pick as winner here should also be the one winning in your mod "
@@ -93,7 +95,8 @@ ConflictTableDialog::ConflictTableDialog(wxWindow* parent, vector<SwapKey> keys,
     topSizer->Add(m_excludeCheck, 0, wxALL, 10);
 
     auto* orderLabel = new wxStaticText(
-        this, wxID_ANY, BOSTr("conflicts.orderLabel", "Priority order - #1 (top) wins first:"));
+        this, wxID_ANY,
+        BOSTr("conflicts.orderLabel", "Priority order - #1 (bottom) wins, same as your mod manager's own list:"));
     topSizer->Add(orderLabel, 0, wxLEFT | wxRIGHT | wxTOP, 10);
 
     auto* orderSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -276,12 +279,12 @@ void ConflictTableDialog::populateOrderList(const KeyGroup& group, const vector<
             }
         }
 
-        // Numbered explicitly (#1 = top = highest priority) - without it, nothing in the list
-        // itself says which end wins, and the group's actual highest-coverage file can end up
-        // last (and therefore never winning anything, if lower-numbered files already cover
-        // everything it does) with no visual explanation why.
+        // Numbered explicitly, counting up from the bottom (#1 = bottom = wins, matching a mod
+        // manager's own load order where the lower entry overwrites the ones above it) - without
+        // it, nothing in the list itself says which end wins, and the group's actual
+        // highest-coverage file can end up on the losing end with no visual explanation why.
         wxString itemLabel = wxString::Format(
-            BOSTr("conflicts.orderItemCoverage", "#%zu  %s  (covers %zu of %zu location(s))"), i + 1,
+            BOSTr("conflicts.orderItemCoverage", "#%zu  %s  (covers %zu of %zu location(s))"), order.size() - i,
             wxString(file), coversCount, group.memberIndices.size());
         if (anyTargetMissing) {
             itemLabel += BOSTr("conflicts.candidateTargetMissing",
@@ -293,10 +296,11 @@ void ConflictTableDialog::populateOrderList(const KeyGroup& group, const vector<
 
 void ConflictTableDialog::refreshOrderList(const KeyGroup& group)
 {
-    // Seeded by how many of the group's non-excluded locations each file currently wins, most
-    // first - a reasonable reconstruction of "what got us here" (BOS's own default, a loaded
-    // decision, or an applied type ranking), since the exact order behind that isn't itself
-    // persisted, only its per-location results are.
+    // Seeded by how many of the group's non-excluded locations each file currently wins, LEAST
+    // first (so the file winning the most ends up last/at the bottom, matching the "bottom wins"
+    // convention) - a reasonable reconstruction of "what got us here" (BOS's own default, a
+    // loaded decision, or an applied type ranking), since the exact order behind that isn't
+    // itself persisted, only its per-location results are.
     vector<pair<string, int>> fileWinCounts;
     for (const auto& file : group.distinctFiles) {
         fileWinCounts.emplace_back(file, 0);
@@ -314,7 +318,7 @@ void ConflictTableDialog::refreshOrderList(const KeyGroup& group)
             }
         }
     }
-    ranges::stable_sort(fileWinCounts, [](const auto& a, const auto& b) { return a.second > b.second; });
+    ranges::stable_sort(fileWinCounts, [](const auto& a, const auto& b) { return a.second < b.second; });
 
     vector<string> order;
     order.reserve(fileWinCounts.size());
@@ -339,9 +343,11 @@ void ConflictTableDialog::applyCurrentOrder(const KeyGroup& group)
         if (swapKey.excluded) {
             continue; // stays excluded regardless of order - see onExcludeToggled
         }
-        for (const auto& file : order) {
+        // Walked bottom-to-top: `order` is top-of-the-on-screen-list first, and the bottom entry
+        // is the one meant to win - see BOSIniMerger::applyTypePriorities's doc comment for why.
+        for (auto fileIt = order.rbegin(); fileIt != order.rend(); ++fileIt) {
             const auto candidateIt
-                = ranges::find_if(swapKey.candidates, [&](const SwapEntry& e) { return e.sourceFile == file; });
+                = ranges::find_if(swapKey.candidates, [&](const SwapEntry& e) { return e.sourceFile == *fileIt; });
             if (candidateIt != swapKey.candidates.end()) {
                 swapKey.selectedCandidate = static_cast<int>(candidateIt - swapKey.candidates.begin());
                 swapKey.userDecided = true;

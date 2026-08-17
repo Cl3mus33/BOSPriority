@@ -152,10 +152,12 @@ public:
     /// Ranks source files - globally ("All Types") and/or per record type ("STAT", "Unknown" for
     /// an unresolved type, ...) - and applies that ranking to every real, non-excluded conflict:
     /// for each one independently (already at (section,key)/single-location granularity, not
-    /// grouped), walks its type's list (falling back to "All Types") until it finds a file that
-    /// actually has a candidate there, and picks it. A conflict whose type has no matching entry
-    /// in either list, or that's already excluded, is left untouched. Does NOT set
-    /// SwapKey::userDecided - see that field's doc comment for why.
+    /// grouped), walks its type's list LAST ENTRY FIRST (falling back to "All Types") until it
+    /// finds a file that actually has a candidate there, and picks it - each list is stored
+    /// top-of-the-on-screen-list first, and the LAST (bottom) entry is the one meant to win, same
+    /// convention as a mod manager's own load order (lower overwrites higher). A conflict whose
+    /// type has no matching entry in either list, or that's already excluded, is left untouched.
+    /// Does NOT set SwapKey::userDecided - see that field's doc comment for why.
     static void applyTypePriorities(std::vector<SwapKey>& keys,
                                      const std::map<std::string, std::vector<std::string>>& priorities);
 

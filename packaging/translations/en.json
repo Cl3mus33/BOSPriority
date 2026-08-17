@@ -71,7 +71,7 @@
   "conflicts": {
     "title": "Manage BOS Conflicts",
     "intro": "Only real conflicts are shown here - a key with only one line, or with chance-weighted variants (chanceR/S/L), is included as-is with nothing to decide. Select a conflict below to rank its candidate files, or exclude a key entirely.",
-    "introLocations": "A key scoped to several BOS locations (e.g. Farmhouse04 in Falkreath vs. Riverwood) is shown as ONE row, but rarely has one file covering every location. Rank the candidates with Move Up/Down: each location independently takes the highest-ranked file that actually has a line for it, shown live in the resolution preview below the list.",
+    "introLocations": "A key scoped to several BOS locations (e.g. Farmhouse04 in Falkreath vs. Riverwood) is shown as ONE row, but rarely has one file covering every location. Rank the candidates with Move Up/Down - the file at the BOTTOM wins, same as your mod manager's own load order (lower overwrites higher): each location independently takes the highest-ranked file that actually has a line for it, shown live in the resolution preview below the list.",
     "introLoadOrderTip": "Tip: the mod you pick as winner here should also be the one winning in your mod manager's own load order (its plugin, meshes, textures) - otherwise something else may quietly override what this swap points to. See the README for details.",
     "filterByType": "Filter by type:",
     "setPriorityButton": "Set Priority by Type...",
@@ -86,7 +86,7 @@
     "selectHint": "Select a conflict above to resolve it.",
     "locationsAffected": "  (%zu location(s) affected)",
     "locationsLabel": "Locations: ",
-    "orderLabel": "Priority order - #1 (top) wins first:",
+    "orderLabel": "Priority order - #1 (bottom) wins, same as your mod manager's own list:",
     "orderItemCoverage": "#%zu  %s  (covers %zu of %zu location(s))",
     "resolutionPreview": "Resolution preview:",
     "candidateTargetMissing": "  [warning: this file's swap target isn't defined by any plugin in Data - BOS would skip it]",
@@ -96,9 +96,9 @@
   },
   "typePriority": {
     "title": "Set Priority by Type",
-    "intro": "Rank every source file that appears in a real conflict, most trusted at the top. Applying this resolves every conflict at once: for each one, the highest-ranked file that actually has a line for it wins. Pick a type below to give just that type a different order - anything you don't customise falls back to \"%s\". Your ranking is remembered for this output folder and reapplied automatically on your next scan.",
+    "intro": "Rank every source file that appears in a real conflict, most trusted at the BOTTOM - same as your mod manager's own load order, where the lower entry overwrites the ones above it. Applying this resolves every conflict at once: for each one, the highest-ranked file that actually has a line for it wins. Pick a type below to give just that type a different order - anything you don't customise falls back to \"%s\". Your ranking is remembered for this output folder and reapplied automatically on your next scan.",
     "typeLabel": "Type:",
-    "orderLabel": "Priority order - #1 (top) wins first:",
+    "orderLabel": "Priority order - #1 (bottom) wins, same as your mod manager's own list:",
     "moveUp": "Move Up",
     "moveDown": "Move Down"
   }

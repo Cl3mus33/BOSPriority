@@ -47,14 +47,16 @@ private:
     void rebuildList();
     void showDetailFor(int listRow);
     void clearDetail();
-    /// Rebuilds m_orderList to show exactly `order` (file names), numbered #1 (top, highest
-    /// priority) onward - always rebuilt rather than mutated in place so the numbers shown are
-    /// never stale after a move.
+    /// Rebuilds m_orderList to show exactly `order` (top-of-list-first file names), numbered so
+    /// the BOTTOM entry reads #1 (it's the one that wins - same convention as a mod manager's own
+    /// load order) - always rebuilt rather than mutated in place so the numbers shown are never
+    /// stale after a move.
     void populateOrderList(const KeyGroup& group, const std::vector<std::string>& order);
     /// Seeds m_orderList for `group`: files ordered by how many of its non-excluded locations
-    /// they currently win, most first - a sensible reconstruction of "what order got us here"
-    /// rather than an arbitrary fixed order, since the exact order a user set in an earlier
-    /// session isn't itself persisted (only its per-location results are - see saveDecisions).
+    /// they currently win, LEAST first (so the current winner ends up at the bottom) - a sensible
+    /// reconstruction of "what order got us here" rather than an arbitrary fixed order, since the
+    /// exact order a user set in an earlier session isn't itself persisted (only its per-location
+    /// results are - see saveDecisions).
     void refreshOrderList(const KeyGroup& group);
     /// Applies m_orderList's current order to every non-excluded member of `group`: each location
     /// independently takes the highest-ranked file that has a candidate there. Marks every member

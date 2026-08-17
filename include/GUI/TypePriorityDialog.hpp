@@ -28,8 +28,10 @@ public:
     TypePriorityDialog(wxWindow* parent, std::vector<std::string> allFiles, std::vector<std::string> types,
                         std::map<std::string, std::vector<std::string>> initialPriorities);
 
-    /// Type key (CONFLICT_ALL_TYPES_KEY for the fallback) -> ordered file list, most-preferred
-    /// first. Only includes types the user actually visited in this dialog.
+    /// Type key (CONFLICT_ALL_TYPES_KEY for the fallback) -> ordered file list, LEAST-preferred
+    /// first, most-preferred (winning) LAST - matches a mod manager's own load order convention
+    /// (lower overwrites higher), also what BOSIniMerger::applyTypePriorities walks backwards
+    /// through. Only includes types the user actually visited in this dialog.
     [[nodiscard]] auto getPriorities() const -> const std::map<std::string, std::vector<std::string>>&;
 
 private:

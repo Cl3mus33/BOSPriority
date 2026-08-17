@@ -64,11 +64,13 @@ themselves launch, same caveat as any other tool in this family (xEdit, AutoSeas
    else overrides it.
 3. Click **Scan Mods**.
 4. If any keys conflict, **Manage Conflicts...** opens a table - filter by type, select a
-   conflict, and check **Exclude this key** or rank its candidate files with **Move Up/Down**. A
-   key scoped to several BOS locations (e.g. the same object swapped differently per town) shows
-   as one row, since one file rarely covers every location: each location independently takes the
-   highest-ranked file that actually has a line for it, shown live in the resolution preview below
-   the list as you reorder. **Set Priority by Type...** lets you rank source files once (globally,
+   conflict, and check **Exclude this key** or rank its candidate files with **Move Up/Down**. The
+   file at the **bottom** of the list wins, same convention as your mod manager's own load order
+   (the mod lower in the list overwrites the ones above it). A key scoped to several BOS locations
+   (e.g. the same object swapped differently per town) shows as one row, since one file rarely
+   covers every location: each location independently takes the highest-ranked file that actually
+   has a line for it, shown live in the resolution preview below the list as you reorder. **Set
+   Priority by Type...** lets you rank source files once (globally,
    or per record type) and apply that ranking to every conflict at once instead of resolving them
    one by one - saved to the output folder and reapplied automatically on every future scan,
    including against conflicts that don't exist yet. A per-key order set in the table always wins

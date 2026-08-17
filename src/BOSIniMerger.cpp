@@ -620,9 +620,12 @@ void BOSIniMerger::applyTypePriorities(vector<SwapKey>& keys, const map<string, 
             continue;
         }
 
-        for (const auto& file : it->second) {
+        // Walked last-to-first: the stored list is "top of the on-screen list first, bottom
+        // last", and the bottom entry is the one meant to win - same convention as a mod manager's
+        // own load order, where the mod lower in the list overwrites the ones above it.
+        for (auto fileIt = it->second.rbegin(); fileIt != it->second.rend(); ++fileIt) {
             const auto candidate
-                = ranges::find_if(swapKey.candidates, [&](const SwapEntry& e) { return e.sourceFile == file; });
+                = ranges::find_if(swapKey.candidates, [&](const SwapEntry& e) { return e.sourceFile == *fileIt; });
             if (candidate != swapKey.candidates.end()) {
                 swapKey.selectedCandidate = static_cast<int>(candidate - swapKey.candidates.begin());
                 break;
