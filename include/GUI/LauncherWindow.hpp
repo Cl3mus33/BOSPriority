@@ -4,6 +4,8 @@
 #include "BOSLocale.hpp"
 
 #include <filesystem>
+#include <functional>
+#include <thread>
 #include <vector>
 #include <wx/wx.h>
 
@@ -25,6 +27,7 @@ public:
     };
 
     explicit LauncherWindow(const InitParams& initParams);
+    ~LauncherWindow() override;
 
     /// Current field values, including any in-progress edits - read by main.cpp's relaunch loop
     /// right before destroying this instance.
@@ -50,8 +53,14 @@ private:
     void updateButtonStates();
 
     /// Runs a scan against the current Game Location and stores the result in m_keys - shared by
-    /// the "Scan Mods" button and the auto-scan-on-launch path below.
-    void performScan();
+    /// the "Scan Mods" button and the auto-scan-on-launch path below. BOSIniMerger::scan() runs on
+    /// a background thread (it only reads files, touches no wx state) while an indeterminate
+    /// progress dialog keeps the app looking responsive instead of freezing - a scan through every
+    /// plugin in Data to resolve EditorID-based swaps can take a real, noticeable while on a large
+    /// modlist. onComplete, if given, runs after the scan result has been applied (m_keys set,
+    /// decisions/priorities applied, log/button-state updated) - used by autoScanOnLaunch(), which
+    /// needs to inspect the result to decide whether to offer closing the app.
+    void performScan(std::function<void()> onComplete = {});
 
     void saveSettings() const;
     /// Called once at startup, only if both paths were remembered from a previous run: scans
@@ -73,4 +82,9 @@ private:
 
     /// Result of the last scan, with any saved/edited winner+exclude decisions applied.
     std::vector<SwapKey> m_keys;
+
+    /// The scan started by the most recent performScan() call - joined once its CallAfter-marshaled
+    /// completion runs on the main thread (see performScan()'s doc comment), and defensively in the
+    /// destructor in case the window is somehow destroyed while one is still in flight.
+    std::thread m_scanThread;
 };

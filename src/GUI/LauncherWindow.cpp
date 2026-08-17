@@ -12,6 +12,7 @@
 #include <fstream>
 #include <wx/dirdlg.h>
 #include <wx/notebook.h>
+#include <wx/progdlg.h>
 #include <windows.h>
 
 using namespace std;
@@ -218,6 +219,17 @@ LauncherWindow::LauncherWindow(const InitParams& initParams)
     CallAfter([this] { autoScanOnLaunch(); });
 }
 
+LauncherWindow::~LauncherWindow()
+{
+    // Should already be finished by now in every real path (the progress dialog performScan()
+    // shows is app-modal, so there's no way to reach window destruction while a scan is still
+    // running) - joining here regardless is just the safe fallback instead of std::terminate()
+    // from destroying a still-joinable thread.
+    if (m_scanThread.joinable()) {
+        m_scanThread.join();
+    }
+}
+
 auto LauncherWindow::getParams() const -> InitParams
 {
     InitParams params;
@@ -280,54 +292,87 @@ void LauncherWindow::saveDecisions() const
     BOSIniMerger::saveDecisions(m_keys, outputDir / BOS_PRIORITY_DECISIONS_FILE_NAME);
 }
 
-void LauncherWindow::performScan()
+void LauncherWindow::performScan(function<void()> onComplete)
 {
     const fs::path gameDir(m_gamePathCtrl->GetValue().ToStdWstring());
 
-    // scan() blocks the event loop, and on a large modlist most of that time goes on building the
-    // EditorID index across every plugin in Data - long enough that the window would otherwise
-    // just look hung. Update() forces this line to actually paint before the scan starts.
-    log(BOSTr("log.scanning",
-        "Scanning Data\\ ... the first swap target that names an EditorID also has to index every "
-        "plugin in Data, which can take a while on a large modlist."));
-    m_logCtrl->Update();
-    const wxBusyCursor busyCursor;
-
-    m_keys = BOSIniMerger::scan(gameDir);
-    // Ranking first, specific per-key decisions second - a saved decision is a more deliberate,
-    // targeted choice than a general file ranking and should win where both apply, same reasoning
-    // as the CLI's --file-priority-before-applyDecisions ordering.
-    applySavedTypePriorities(m_keys);
-    applySavedDecisions(m_keys);
-
-    // scan() already safely ignores its own previous output (blanked stand-ins, AIO_SWAP.ini) -
-    // but if any showed up in Data at all, it almost certainly means the Output mod is currently
-    // ENABLED in the mod manager, masking every real source ini it already blanked. Left
-    // undetected this looks like "BOSPriority stopped finding conflicts" with no obvious cause.
-    if (const auto activeOutputCount = BOSIniMerger::countActiveOutputFiles(gameDir); activeOutputCount > 0) {
-        const wxString message = wxString::Format(
-            BOSTr("dialog.outputActive.message",
-                "Found %d file(s) in Data that are BOSPriority's own previous output (blanked "
-                "originals, or AIO_SWAP.ini). This almost always means your Output mod is currently "
-                "enabled in your mod manager - while it is, BOSPriority only sees its own blanked "
-                "files instead of the real ones, so this scan will find far fewer conflicts than "
-                "actually exist (possibly none). Disable the Output mod, then scan again."),
-            activeOutputCount);
-        log(message);
-        wxMessageBox(message, BOSTr("dialog.outputActive.title", "Output mod appears to be active"),
-                      wxOK | wxICON_WARNING, this);
+    if (m_scanThread.joinable()) {
+        m_scanThread.join(); // a previous scan's completion already ran - this just reclaims it
     }
 
-    const auto conflictCount = countConflicts(m_keys);
-    log(wxString::Format(BOSTr("log.foundKeys", "Found %zu key(s), %lld in conflict."), m_keys.size(), conflictCount));
-    if (!m_keys.empty() && conflictCount == 0) {
-        log(BOSTr("log.noConflictsHint",
-            "No conflicts - BOS will already produce the correct result directly from these "
-            "files, nothing needs generating. Generate is still there if you just want a single "
-            "consolidated ini (e.g. to tidy up a modlist), but it's optional."));
-    }
-    updateButtonStates();
-    saveSettings();
+    // Scanning through every plugin in Data to resolve EditorID-based swaps can take a real,
+    // noticeable while on a large modlist. BOSIniMerger::scan() only reads files and touches no wx
+    // state, so it's safe to run on its own thread while this dialog stays responsive and an
+    // indeterminate progress dialog (app-modal - nothing else to interact with mid-scan anyway)
+    // pulses instead of the window just looking hung.
+    auto* progress = new wxProgressDialog(BOSTr("dialog.scanning.title", "Scanning..."),
+        BOSTr("dialog.scanning.message",
+            "Scanning Data\\ for *_SWAP.ini files... this can take a while on a large modlist."),
+        100, this, wxPD_APP_MODAL | wxPD_ELAPSED_TIME);
+
+    auto* timer = new wxTimer(this);
+    timer->Bind(wxEVT_TIMER, [progress](wxTimerEvent&) { progress->Pulse(); });
+    timer->Start(100);
+
+    m_scanThread = thread([this, gameDir, progress, timer, onComplete = std::move(onComplete)]() mutable {
+        auto keys = BOSIniMerger::scan(gameDir);
+        // CallAfter on `this` (not wxTheApp): wx ties a pending call queued this way to the
+        // handler's own lifetime and cancels it automatically if the handler is destroyed first -
+        // exactly the safety this needs, since the lambda below captures `this` and this call is
+        // itself made from the background thread (documented thread-safe since wx 3.0).
+        this->CallAfter(
+            [this, gameDir, keys = std::move(keys), progress, timer, onComplete = std::move(onComplete)]() mutable {
+                timer->Stop();
+                delete timer; // wxTimer isn't a wxWindow - no Destroy(), just delete it directly
+                progress->Destroy();
+
+                m_keys = std::move(keys);
+                // Ranking first, specific per-key decisions second - a saved decision is a more
+                // deliberate, targeted choice than a general file ranking and should win where
+                // both apply, same reasoning as the CLI's --file-priority-before-applyDecisions
+                // ordering.
+                applySavedTypePriorities(m_keys);
+                applySavedDecisions(m_keys);
+
+                // scan() already safely ignores its own previous output (blanked stand-ins,
+                // AIO_SWAP.ini) - but if any showed up in Data at all, it almost certainly means
+                // the Output mod is currently ENABLED in the mod manager, masking every original
+                // source ini it already blanked. Left undetected this looks like "BOSPriority
+                // stopped finding conflicts" with no obvious cause.
+                if (const auto activeOutputCount = BOSIniMerger::countActiveOutputFiles(gameDir);
+                    activeOutputCount > 0) {
+                    const wxString message = wxString::Format(
+                        BOSTr("dialog.outputActive.message",
+                            "Found %d file(s) in Data that are BOSPriority's own previous output "
+                            "(blanked originals, or AIO_SWAP.ini). This almost always means your "
+                            "Output mod is currently enabled in your mod manager - while it is, "
+                            "BOSPriority only sees its own blanked files instead of the real ones, "
+                            "so this scan will find far fewer conflicts than actually exist "
+                            "(possibly none). Disable the Output mod, then scan again."),
+                        activeOutputCount);
+                    log(message);
+                    wxMessageBox(message, BOSTr("dialog.outputActive.title", "Output mod appears to be active"),
+                                  wxOK | wxICON_WARNING, this);
+                }
+
+                const auto conflictCount = countConflicts(m_keys);
+                log(wxString::Format(
+                    BOSTr("log.foundKeys", "Found %zu key(s), %lld in conflict."), m_keys.size(), conflictCount));
+                if (!m_keys.empty() && conflictCount == 0) {
+                    log(BOSTr("log.noConflictsHint",
+                        "No conflicts - BOS will already produce the correct result directly from "
+                        "these files, nothing needs generating. Generate is still there if you just "
+                        "want a single consolidated ini (e.g. to tidy up a modlist), but it's "
+                        "optional."));
+                }
+                updateButtonStates();
+                saveSettings();
+
+                if (onComplete) {
+                    onComplete();
+                }
+            });
+    });
 }
 
 void LauncherWindow::onScan(wxCommandEvent& /*event*/)
@@ -373,28 +418,28 @@ void LauncherWindow::autoScanOnLaunch()
     }
 
     log(BOSTr("log.autoScanning", "Remembered Game/Output locations from last time - scanning automatically..."));
-    performScan();
+    performScan([this] {
+        if (m_keys.empty()) {
+            return; // likely a stale/misconfigured path - let the user notice and fix it themselves
+        }
 
-    if (m_keys.empty()) {
-        return; // likely a stale/misconfigured path - let the user notice and fix it themselves
-    }
+        if (countConflicts(m_keys) > 0) {
+            return; // there's real work to do, leave the window open on it
+        }
 
-    if (countConflicts(m_keys) > 0) {
-        return; // there's real work to do, leave the window open on it
-    }
-
-    wxMessageDialog dlg(this,
-        BOSTr("dialog.nothingToManage.message",
-            "Scanned automatically and found no conflicts - BOS will already produce the correct "
-            "result directly from these files, nothing needs generating. Generating a single "
-            "consolidated ini is still there if you want one (e.g. to tidy up a modlist), but it's "
-            "entirely optional. Close BOSPriority?"),
-        BOSTr("dialog.nothingToManage.title", "Nothing to manage"), wxYES_NO | wxICON_INFORMATION);
-    dlg.SetYesNoLabels(BOSTr("dialog.nothingToManage.close", "Close BOSPriority"),
-                        BOSTr("dialog.nothingToManage.keepOpen", "Keep Open"));
-    if (dlg.ShowModal() == wxID_YES) {
-        EndModal(wxID_CANCEL);
-    }
+        wxMessageDialog dlg(this,
+            BOSTr("dialog.nothingToManage.message",
+                "Scanned automatically and found no conflicts - BOS will already produce the correct "
+                "result directly from these files, nothing needs generating. Generating a single "
+                "consolidated ini is still there if you want one (e.g. to tidy up a modlist), but it's "
+                "entirely optional. Close BOSPriority?"),
+            BOSTr("dialog.nothingToManage.title", "Nothing to manage"), wxYES_NO | wxICON_INFORMATION);
+        dlg.SetYesNoLabels(BOSTr("dialog.nothingToManage.close", "Close BOSPriority"),
+                            BOSTr("dialog.nothingToManage.keepOpen", "Keep Open"));
+        if (dlg.ShowModal() == wxID_YES) {
+            EndModal(wxID_CANCEL);
+        }
+    });
 }
 
 void LauncherWindow::onManageConflicts(wxCommandEvent& /*event*/)

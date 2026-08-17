@@ -36,7 +36,6 @@
     "usvfsHint": "BOSPriority reads it exactly like the game would: if launched through MO2/Vortex, that path transparently shows your merged mod view; there is no need to separately resolve where your instance or mods folders live.",
     "pickGameLocation": "Pick a Game Location first.",
     "pickOutputLocation": "Pick an output folder first.",
-    "scanning": "Scanning Data\\ ... the first swap target that names an EditorID also has to index every plugin in Data, which can take a while on a large modlist.",
     "foundKeys": "Found %zu key(s), %lld in conflict.",
     "noConflictsHint": "No conflicts - BOS will already produce the correct result directly from these files, nothing needs generating. Generate is still there if you just want a single consolidated ini (e.g. to tidy up a modlist), but it's optional.",
     "decisionsSaved": "Conflict decisions updated and saved - remembered next time you scan this output folder.",
@@ -62,6 +61,10 @@
     "outputActive": {
       "title": "Output mod appears to be active",
       "message": "Found %d file(s) in Data that are BOSPriority's own previous output (blanked originals, or AIO_SWAP.ini). This almost always means your Output mod is currently enabled in your mod manager - while it is, BOSPriority only sees its own blanked files instead of the real ones, so this scan will find far fewer conflicts than actually exist (possibly none). Disable the Output mod, then scan again."
+    },
+    "scanning": {
+      "title": "Scanning...",
+      "message": "Scanning Data\\ for *_SWAP.ini files... this can take a while on a large modlist."
     }
   },
   "conflicts": {
