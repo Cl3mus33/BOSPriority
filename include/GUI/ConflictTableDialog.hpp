@@ -12,9 +12,15 @@
 /// Shows only the keys that actually conflict (2+ source files disagree), filterable by resolved
 /// record type. Conflicts sharing the same key but scoped to different BOS location filters (e.g.
 /// Farmhouse04 under [Forms|FalkreathLocation] vs. [Forms|RiverwoodLocation]) are grouped into a
-/// single row: picking a winning FILE resolves every location that file covers in one decision,
-/// rather than forcing a separate pick per location. A location the chosen file doesn't cover
-/// keeps its own independent default (BOS's own last-declared-wins rule) until picked explicitly.
+/// single row.
+///
+/// Resolving a group means ranking its candidate files (Move Up/Down), not just picking one
+/// winner: a single file rarely covers every location a key touches (one mod might only patch
+/// Falkreath, another only Riverwood), so each location independently takes the highest-ranked
+/// file that actually has a line for it - visible live in the resolution preview below the list.
+/// This is the same "walk a ranking per location" idea as the global "Set Priority by Type"
+/// button, just scoped to one key instead of every conflict of a type - the two compose: a
+/// per-key order set here always wins over the global ranking for that key's locations.
 class ConflictTableDialog : public wxDialog {
 public:
     /// keys: the full scan() result (conflicts and non-conflicts alike). Non-conflicting entries
@@ -41,13 +47,28 @@ private:
     void rebuildList();
     void showDetailFor(int listRow);
     void clearDetail();
-    void applyWinnerFile(const KeyGroup& group, const std::string& winnerFile);
+    /// Seeds m_orderList for `group`: files ordered by how many of its non-excluded locations
+    /// they currently win, most first - a sensible reconstruction of "what order got us here"
+    /// rather than an arbitrary fixed order, since the exact order a user set in an earlier
+    /// session isn't itself persisted (only its per-location results are - see saveDecisions).
+    void refreshOrderList(const KeyGroup& group);
+    /// Applies m_orderList's current order to every non-excluded member of `group`: each location
+    /// independently takes the highest-ranked file that has a candidate there. Marks every member
+    /// it resolves as userDecided.
+    void applyCurrentOrder(const KeyGroup& group);
+    /// Refreshes the "Location -> resolved file" preview beneath the order list for `group`.
+    void refreshResolutionSummary(const KeyGroup& group);
     [[nodiscard]] auto winnerLabelFor(const KeyGroup& group) const -> wxString;
+    /// Returns the group currently shown in the detail panel, or nullptr if none/selection is
+    /// stale - shared by the exclude checkbox and order-list handlers, which both need to know
+    /// which group they're acting on.
+    [[nodiscard]] auto selectedGroup() -> KeyGroup*;
 
     void onTypeFilterChanged(wxCommandEvent& event);
     void onListSelectionChanged(wxListEvent& event);
     void onExcludeToggled(wxCommandEvent& event);
-    void onWinnerChosen(wxCommandEvent& event);
+    void onOrderMoveUp(wxCommandEvent& event);
+    void onOrderMoveDown(wxCommandEvent& event);
     void onSetPriorityByType(wxCommandEvent& event);
 
     std::vector<SwapKey> m_keys; // full set, edited in place
@@ -61,8 +82,8 @@ private:
     wxStaticText* m_detailKeyLabel = nullptr;
     wxStaticText* m_detailLocationsLabel = nullptr; // lists every location name in the selected group
     wxCheckBox* m_excludeCheck = nullptr;
-    wxPanel* m_radioPanel = nullptr;
-    wxBoxSizer* m_radioSizer = nullptr;
-    std::vector<wxRadioButton*> m_radioButtons; // one per distinct file, for whichever group is selected
-    std::vector<std::string> m_radioButtonFiles; // parallel to m_radioButtons
+    wxListBox* m_orderList = nullptr; // the selected group's candidate files, in resolution order
+    wxButton* m_moveUpButton = nullptr;
+    wxButton* m_moveDownButton = nullptr;
+    wxStaticText* m_resolutionSummaryLabel = nullptr; // live "Location -> resolved file" preview
 };

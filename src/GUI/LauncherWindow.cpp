@@ -281,10 +281,18 @@ void LauncherWindow::applySavedDecisions(vector<SwapKey>& keys) const
     BOSIniMerger::applyDecisions(keys, outputDir / BOS_PRIORITY_DECISIONS_FILE_NAME);
 }
 
-void LauncherWindow::applySavedTypePriorities(vector<SwapKey>& keys) const
+void LauncherWindow::applySavedTypePriorities(vector<SwapKey>& keys)
 {
     const fs::path outputDir(m_outputPathCtrl->GetValue().ToStdWstring());
     const auto priorities = BOSIniMerger::loadTypePriorities(outputDir / BOS_PRIORITY_TYPE_RANKING_FILE_NAME);
+    if (!priorities.empty()) {
+        // Visible confirmation that a saved ranking was actually found and is being reapplied -
+        // otherwise there's no way to tell "no ranking saved" apart from "ranking silently didn't
+        // take" just by looking at the log.
+        log(wxString::Format(
+            BOSTr("log.rankingReapplied", "Reapplied saved file-priority ranking (%zu type(s))."),
+            priorities.size()));
+    }
     BOSIniMerger::applyTypePriorities(keys, priorities);
 }
 

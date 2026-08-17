@@ -6,11 +6,13 @@
 #include <algorithm>
 #include <set>
 #include <unordered_map>
-#include <wx/radiobut.h>
 
 using namespace std;
 
 namespace {
+constexpr int ID_MOVE_UP = wxID_HIGHEST + 40;
+constexpr int ID_MOVE_DOWN = wxID_HIGHEST + 41;
+
 // scan() explodes a multi-location BOS section into one display section per location (see
 // BOSIniMerger.hpp's doc comment), so a member's own .section is already a single-location string
 // like "[Forms|FalkreathLocation]" - this just strips the "[Prefix|" / "]" wrapper for display,
@@ -32,7 +34,7 @@ auto locationLabel(const string& section) -> string
 
 ConflictTableDialog::ConflictTableDialog(wxWindow* parent, vector<SwapKey> keys, filesystem::path outputDir)
     : wxDialog(parent, wxID_ANY, BOSTr("conflicts.title", "Manage BOS Conflicts"), wxDefaultPosition,
-               wxSize(820, 640), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
+               wxSize(820, 680), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
     , m_keys(std::move(keys))
     , m_outputDir(std::move(outputDir))
 {
@@ -41,14 +43,14 @@ ConflictTableDialog::ConflictTableDialog(wxWindow* parent, vector<SwapKey> keys,
     auto* introText = new wxStaticText(this, wxID_ANY,
         BOSTr("conflicts.intro",
             "Only real conflicts are shown here - a key with only one line, or with chance-weighted "
-            "variants (chanceR/S/L), is included as-is with nothing to decide. Pick which file wins "
-            "each remaining conflict, or exclude a key entirely.")
+            "variants (chanceR/S/L), is included as-is with nothing to decide. Select a conflict "
+            "below to rank its candidate files, or exclude a key entirely.")
             + "\n\n"
             + BOSTr("conflicts.introLocations",
                 "A key scoped to several BOS locations (e.g. Farmhouse04 in Falkreath vs. Riverwood) is "
-                "shown as ONE row: pick which file wins and every location it covers is resolved in one "
-                "go. A location the chosen file doesn't cover keeps its own default until you pick "
-                "something else, or exclude it.")
+                "shown as ONE row, but rarely has one file covering every location. Rank the candidates "
+                "with Move Up/Down: each location independently takes the highest-ranked file that "
+                "actually has a line for it, shown live in the resolution preview below the list.")
             + "\n\n"
             + BOSTr("conflicts.introLoadOrderTip",
                 "Tip: the mod you pick as winner here should also be the one winning in your mod "
@@ -67,7 +69,7 @@ ConflictTableDialog::ConflictTableDialog(wxWindow* parent, vector<SwapKey> keys,
     filterSizer->Add(priorityButton, 0, wxALL, 5);
     topSizer->Add(filterSizer, 0);
 
-    m_listCtrl = new wxListCtrl(this, wxID_ANY, wxDefaultPosition, wxSize(-1, 260),
+    m_listCtrl = new wxListCtrl(this, wxID_ANY, wxDefaultPosition, wxSize(-1, 220),
                                  wxLC_REPORT | wxLC_SINGLE_SEL);
     m_listCtrl->InsertColumn(0, BOSTr("conflicts.column.type", "Type"), wxLIST_FORMAT_LEFT, 90);
     m_listCtrl->InsertColumn(1, BOSTr("conflicts.column.key", "Key"), wxLIST_FORMAT_LEFT, 170);
@@ -90,10 +92,19 @@ ConflictTableDialog::ConflictTableDialog(wxWindow* parent, vector<SwapKey> keys,
     m_excludeCheck->Enable(false);
     topSizer->Add(m_excludeCheck, 0, wxALL, 10);
 
-    m_radioPanel = new wxPanel(this);
-    m_radioSizer = new wxBoxSizer(wxVERTICAL);
-    m_radioPanel->SetSizer(m_radioSizer);
-    topSizer->Add(m_radioPanel, 0, wxLEFT | wxRIGHT | wxEXPAND, 10);
+    auto* orderSizer = new wxBoxSizer(wxHORIZONTAL);
+    m_orderList = new wxListBox(this, wxID_ANY, wxDefaultPosition, wxSize(-1, 110), 0, nullptr, wxLB_SINGLE);
+    orderSizer->Add(m_orderList, 1, wxALL | wxEXPAND, 5);
+    auto* moveButtonSizer = new wxBoxSizer(wxVERTICAL);
+    m_moveUpButton = new wxButton(this, ID_MOVE_UP, BOSTr("typePriority.moveUp", "Move Up"));
+    m_moveDownButton = new wxButton(this, ID_MOVE_DOWN, BOSTr("typePriority.moveDown", "Move Down"));
+    moveButtonSizer->Add(m_moveUpButton, 0, wxALL, 5);
+    moveButtonSizer->Add(m_moveDownButton, 0, wxALL, 5);
+    orderSizer->Add(moveButtonSizer, 0, wxALIGN_CENTER_VERTICAL);
+    topSizer->Add(orderSizer, 0, wxLEFT | wxRIGHT | wxEXPAND, 5);
+
+    m_resolutionSummaryLabel = new wxStaticText(this, wxID_ANY, wxString());
+    topSizer->Add(m_resolutionSummaryLabel, 0, wxALL | wxEXPAND, 10);
 
     auto* dialogButtons = CreateButtonSizer(wxOK | wxCANCEL);
     if (dialogButtons != nullptr) {
@@ -105,6 +116,8 @@ ConflictTableDialog::ConflictTableDialog(wxWindow* parent, vector<SwapKey> keys,
     m_typeFilter->Bind(wxEVT_CHOICE, &ConflictTableDialog::onTypeFilterChanged, this);
     m_listCtrl->Bind(wxEVT_LIST_ITEM_SELECTED, &ConflictTableDialog::onListSelectionChanged, this);
     m_excludeCheck->Bind(wxEVT_CHECKBOX, &ConflictTableDialog::onExcludeToggled, this);
+    m_moveUpButton->Bind(wxEVT_BUTTON, &ConflictTableDialog::onOrderMoveUp, this);
+    m_moveDownButton->Bind(wxEVT_BUTTON, &ConflictTableDialog::onOrderMoveDown, this);
     priorityButton->Bind(wxEVT_BUTTON, &ConflictTableDialog::onSetPriorityByType, this);
 
     buildGroups();
@@ -224,10 +237,115 @@ void ConflictTableDialog::clearDetail()
     m_detailLocationsLabel->SetLabel(wxString());
     m_excludeCheck->SetValue(false);
     m_excludeCheck->Enable(false);
-    m_radioSizer->Clear(true); // destroys the previous group's radio buttons too
-    m_radioButtons.clear();
-    m_radioButtonFiles.clear();
-    m_radioPanel->Layout();
+    m_orderList->Clear();
+    m_orderList->Enable(false);
+    m_moveUpButton->Enable(false);
+    m_moveDownButton->Enable(false);
+    m_resolutionSummaryLabel->SetLabel(wxString());
+}
+
+auto ConflictTableDialog::selectedGroup() -> KeyGroup*
+{
+    const long row = m_listCtrl->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+    if (row < 0 || static_cast<size_t>(row) >= m_rowToGroupIndex.size()) {
+        return nullptr;
+    }
+    return &m_groups[m_rowToGroupIndex[static_cast<size_t>(row)]];
+}
+
+void ConflictTableDialog::refreshOrderList(const KeyGroup& group)
+{
+    // Seeded by how many of the group's non-excluded locations each file currently wins, most
+    // first - a reasonable reconstruction of "what got us here" (BOS's own default, a loaded
+    // decision, or an applied type ranking), since the exact order behind that isn't itself
+    // persisted, only its per-location results are.
+    vector<pair<string, int>> fileWinCounts;
+    for (const auto& file : group.distinctFiles) {
+        fileWinCounts.emplace_back(file, 0);
+    }
+    for (const size_t idx : group.memberIndices) {
+        const auto& swapKey = m_keys[idx];
+        if (swapKey.excluded) {
+            continue;
+        }
+        const string winner = swapKey.candidates[static_cast<size_t>(swapKey.selectedCandidate)].sourceFile;
+        for (auto& [file, count] : fileWinCounts) {
+            if (file == winner) {
+                ++count;
+                break;
+            }
+        }
+    }
+    ranges::stable_sort(fileWinCounts, [](const auto& a, const auto& b) { return a.second > b.second; });
+
+    m_orderList->Clear();
+    for (const auto& [file, count] : fileWinCounts) {
+        size_t coversCount = 0;
+        bool anyTargetMissing = false;
+        for (const size_t idx : group.memberIndices) {
+            const auto& candidates = m_keys[idx].candidates;
+            const auto it = ranges::find_if(candidates, [&](const SwapEntry& e) { return e.sourceFile == file; });
+            if (it == candidates.end()) {
+                continue;
+            }
+            ++coversCount;
+            if (it->targetMissing) {
+                anyTargetMissing = true;
+            }
+        }
+
+        wxString itemLabel = wxString::Format(BOSTr("conflicts.orderItemCoverage", "%s  (covers %zu of %zu location(s))"),
+            wxString(file), coversCount, group.memberIndices.size());
+        if (anyTargetMissing) {
+            itemLabel += BOSTr("conflicts.candidateTargetMissing",
+                "  [warning: this file's swap target isn't defined by any plugin in Data - BOS would skip it]");
+        }
+        m_orderList->Append(itemLabel, new wxStringClientData(file));
+    }
+}
+
+void ConflictTableDialog::applyCurrentOrder(const KeyGroup& group)
+{
+    vector<string> order;
+    for (unsigned i = 0; i < m_orderList->GetCount(); ++i) {
+        auto* data = dynamic_cast<wxStringClientData*>(m_orderList->GetClientObject(i));
+        if (data != nullptr) {
+            order.push_back(data->GetData().ToStdString());
+        }
+    }
+
+    for (const size_t idx : group.memberIndices) {
+        auto& swapKey = m_keys[idx];
+        if (swapKey.excluded) {
+            continue; // stays excluded regardless of order - see onExcludeToggled
+        }
+        for (const auto& file : order) {
+            const auto candidateIt
+                = ranges::find_if(swapKey.candidates, [&](const SwapEntry& e) { return e.sourceFile == file; });
+            if (candidateIt != swapKey.candidates.end()) {
+                swapKey.selectedCandidate = static_cast<int>(candidateIt - swapKey.candidates.begin());
+                swapKey.userDecided = true;
+                break;
+            }
+        }
+    }
+}
+
+void ConflictTableDialog::refreshResolutionSummary(const KeyGroup& group)
+{
+    wxString summary = BOSTr("conflicts.resolutionPreview", "Resolution preview:") + "\n";
+    for (const size_t idx : group.memberIndices) {
+        const auto& swapKey = m_keys[idx];
+        const wxString locName = locationLabel(swapKey.section);
+        const wxString resolvedTo = swapKey.excluded
+            ? BOSTr("conflicts.excludedLabel", "(excluded)")
+            : wxString(swapKey.candidates[static_cast<size_t>(swapKey.selectedCandidate)].sourceFile);
+        summary += wxString::Format("  %s -> %s\n", locName, resolvedTo);
+    }
+
+    m_resolutionSummaryLabel->SetLabel(summary);
+    m_resolutionSummaryLabel->Wrap(780);
+    Layout();
 }
 
 void ConflictTableDialog::showDetailFor(int listRow)
@@ -262,93 +380,13 @@ void ConflictTableDialog::showDetailFor(int listRow)
     m_excludeCheck->Enable(true);
     m_excludeCheck->SetValue(allExcluded);
 
-    m_radioSizer->Clear(true);
-    m_radioButtons.clear();
-    m_radioButtonFiles.clear();
+    m_orderList->Enable(!allExcluded);
+    m_moveUpButton->Enable(!allExcluded);
+    m_moveDownButton->Enable(!allExcluded);
+    refreshOrderList(group);
+    refreshResolutionSummary(group);
 
-    // A radio pre-selects only if every non-excluded location currently agrees on the same
-    // winning file - otherwise no radio is pre-selected, since there isn't yet one answer to show.
-    optional<string> unanimousWinner;
-    bool disagreement = false;
-    for (const size_t idx : group.memberIndices) {
-        const auto& swapKey = m_keys[idx];
-        if (swapKey.excluded) {
-            continue;
-        }
-        const string winner = swapKey.candidates[static_cast<size_t>(swapKey.selectedCandidate)].sourceFile;
-        if (!unanimousWinner) {
-            unanimousWinner = winner;
-        } else if (*unanimousWinner != winner) {
-            disagreement = true;
-        }
-    }
-    if (disagreement) {
-        unanimousWinner.reset();
-    }
-
-    for (size_t i = 0; i < group.distinctFiles.size(); ++i) {
-        const auto& file = group.distinctFiles[i];
-        size_t coversCount = 0;
-        bool anyTargetMissing = false;
-        vector<string> coveredLocations;
-        for (const size_t idx : group.memberIndices) {
-            const auto& candidates = m_keys[idx].candidates;
-            const auto it = ranges::find_if(candidates, [&](const SwapEntry& e) { return e.sourceFile == file; });
-            if (it == candidates.end()) {
-                continue;
-            }
-            ++coversCount;
-            coveredLocations.push_back(locationLabel(m_keys[idx].section));
-            if (it->targetMissing) {
-                anyTargetMissing = true;
-            }
-        }
-
-        wxString coveredList;
-        for (size_t j = 0; j < coveredLocations.size(); ++j) {
-            if (j > 0) {
-                coveredList += ", ";
-            }
-            coveredList += coveredLocations[j];
-        }
-        wxString label = wxString::Format(
-            BOSTr("conflicts.candidateWins", "%s  -  wins %zu of %zu location(s): %s"), wxString(file), coversCount,
-            group.memberIndices.size(), coveredList);
-        if (anyTargetMissing) {
-            // BOS silently skips a swap whose target isn't defined by any active plugin - picking
-            // this file as winner wouldn't actually change anything in-game for that location.
-            label += BOSTr("conflicts.candidateTargetMissing",
-                "  [warning: this file's swap target isn't defined by any plugin in Data - BOS would skip it]");
-        }
-        auto* radio = new wxRadioButton(m_radioPanel, wxID_ANY, label, wxDefaultPosition, wxDefaultSize,
-                                         i == 0 ? wxRB_GROUP : 0);
-        radio->SetValue(unanimousWinner.has_value() && *unanimousWinner == file);
-        radio->Enable(!allExcluded);
-        radio->Bind(wxEVT_RADIOBUTTON, &ConflictTableDialog::onWinnerChosen, this);
-        m_radioSizer->Add(radio, 0, wxALL, 3);
-        m_radioButtons.push_back(radio);
-        m_radioButtonFiles.push_back(file);
-    }
-
-    m_radioPanel->Layout();
     Layout();
-}
-
-void ConflictTableDialog::applyWinnerFile(const KeyGroup& group, const string& winnerFile)
-{
-    for (const size_t idx : group.memberIndices) {
-        auto& swapKey = m_keys[idx];
-        for (size_t i = 0; i < swapKey.candidates.size(); ++i) {
-            if (swapKey.candidates[i].sourceFile == winnerFile) {
-                swapKey.selectedCandidate = static_cast<int>(i);
-                swapKey.excluded = false;
-                swapKey.userDecided = true;
-                break;
-            }
-        }
-        // A location this file doesn't cover is left untouched - it keeps whatever it already
-        // had (its own last-declared-wins default, or an earlier explicit pick).
-    }
 }
 
 void ConflictTableDialog::onTypeFilterChanged(wxCommandEvent& /*event*/)
@@ -363,44 +401,82 @@ void ConflictTableDialog::onListSelectionChanged(wxListEvent& event)
 
 void ConflictTableDialog::onExcludeToggled(wxCommandEvent& /*event*/)
 {
-    const long row = m_listCtrl->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
-    if (row < 0 || static_cast<size_t>(row) >= m_rowToGroupIndex.size()) {
+    auto* group = selectedGroup();
+    if (group == nullptr) {
         return;
     }
 
-    const size_t groupIdx = m_rowToGroupIndex[static_cast<size_t>(row)];
-    const auto& group = m_groups[groupIdx];
     const bool excluded = m_excludeCheck->GetValue();
-    for (const size_t idx : group.memberIndices) {
+    for (const size_t idx : group->memberIndices) {
         m_keys[idx].excluded = excluded;
         m_keys[idx].userDecided = true;
     }
 
-    for (auto* radio : m_radioButtons) {
-        radio->Enable(!excluded);
+    m_orderList->Enable(!excluded);
+    m_moveUpButton->Enable(!excluded);
+    m_moveDownButton->Enable(!excluded);
+    if (!excluded) {
+        applyCurrentOrder(*group); // re-resolve now that it's no longer excluded
     }
+    refreshResolutionSummary(*group);
 
-    m_listCtrl->SetItem(row, 3, winnerLabelFor(group));
+    const long row = m_listCtrl->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+    if (row >= 0) {
+        m_listCtrl->SetItem(row, 3, winnerLabelFor(*group));
+    }
 }
 
-void ConflictTableDialog::onWinnerChosen(wxCommandEvent& /*event*/)
+namespace {
+void moveListBoxItem(wxListBox* list, int selection, int target)
 {
-    const long row = m_listCtrl->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
-    if (row < 0 || static_cast<size_t>(row) >= m_rowToGroupIndex.size()) {
+    const wxString label = list->GetString(static_cast<unsigned>(selection));
+    auto* data = dynamic_cast<wxStringClientData*>(list->GetClientObject(static_cast<unsigned>(selection)));
+    const wxString value = data != nullptr ? data->GetData() : wxString();
+
+    list->Delete(static_cast<unsigned>(selection));
+    list->Insert(label, static_cast<unsigned>(target), new wxStringClientData(value));
+    list->SetSelection(target);
+}
+} // namespace
+
+void ConflictTableDialog::onOrderMoveUp(wxCommandEvent& /*event*/)
+{
+    const int selection = m_orderList->GetSelection();
+    if (selection == wxNOT_FOUND || selection == 0) {
         return;
     }
+    moveListBoxItem(m_orderList, selection, selection - 1);
 
-    const size_t groupIdx = m_rowToGroupIndex[static_cast<size_t>(row)];
-    const auto& group = m_groups[groupIdx];
-
-    for (size_t i = 0; i < m_radioButtons.size(); ++i) {
-        if (m_radioButtons[i]->GetValue()) {
-            applyWinnerFile(group, m_radioButtonFiles[i]);
-            break;
-        }
+    auto* group = selectedGroup();
+    if (group == nullptr) {
+        return;
     }
+    applyCurrentOrder(*group);
+    refreshResolutionSummary(*group);
+    const long row = m_listCtrl->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+    if (row >= 0) {
+        m_listCtrl->SetItem(row, 3, winnerLabelFor(*group));
+    }
+}
 
-    m_listCtrl->SetItem(row, 3, winnerLabelFor(group));
+void ConflictTableDialog::onOrderMoveDown(wxCommandEvent& /*event*/)
+{
+    const int selection = m_orderList->GetSelection();
+    if (selection == wxNOT_FOUND || static_cast<unsigned>(selection) + 1 >= m_orderList->GetCount()) {
+        return;
+    }
+    moveListBoxItem(m_orderList, selection, selection + 1);
+
+    auto* group = selectedGroup();
+    if (group == nullptr) {
+        return;
+    }
+    applyCurrentOrder(*group);
+    refreshResolutionSummary(*group);
+    const long row = m_listCtrl->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+    if (row >= 0) {
+        m_listCtrl->SetItem(row, 3, winnerLabelFor(*group));
+    }
 }
 
 void ConflictTableDialog::onSetPriorityByType(wxCommandEvent& /*event*/)
