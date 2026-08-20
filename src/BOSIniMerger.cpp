@@ -528,6 +528,27 @@ auto BOSIniMerger::merge(const vector<SwapKey>& keys, const fs::path& outputFold
         }
     }
 
+    // Cleans up stand-ins left over from a PREVIOUS generation whose source mod isn't part of
+    // this one anymore (uninstalled, renamed) - merge() only ever wrote new stand-ins, never
+    // removed stale ones, so they'd otherwise accumulate forever. Only runs after every rename
+    // above has already succeeded, so a failed generation never touches old (still-valid) output.
+    // Only ever removes a file this tool recognizes as its own (isKnownBosPriorityOutput) - never
+    // anything else that happens to live in the output folder.
+    for (const auto& entry : fs::directory_iterator(outputFolder)) {
+        if (!entry.is_regular_file() || !isBosSwapIniFile(entry.path())) {
+            continue;
+        }
+        const string fileName = StringUtil::utf16ToUtf8(entry.path().filename().wstring());
+        if (sourceFileNames.contains(fileName)
+            || StringUtil::toLowerW(entry.path().filename().wstring()) == L"aio_swap.ini") {
+            continue; // still current, or is AIO_SWAP.ini itself
+        }
+        if (isKnownBosPriorityOutput(entry.path())) {
+            error_code ec;
+            fs::remove(entry.path(), ec); // best-effort - a locked file just lingers till next run
+        }
+    }
+
     return stats;
 }
 
