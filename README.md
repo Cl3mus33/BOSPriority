@@ -28,8 +28,7 @@ asks for) and it will:
   again unless something new shows up.
 - Run fully offline against your files - it never touches the running game.
 
-BOSPriority only manages **existing** BOS ini files. It does not generate BOS entries from ESPs -
-that's a separate tool (an xEdit script, `BOS AIO Patcher.pas`).
+BOSPriority only manages **existing** BOS ini files. It does not generate BOS entries from ESPs.
 
 ### Why "Game Location" and not an MO2 instance folder
 
