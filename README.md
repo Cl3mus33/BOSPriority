@@ -142,11 +142,7 @@ cmake --build buildRelease --config RelWithDebInfo
 
 ## Credits
 
-- Architecture (scanning the real Data path and relying on the mod manager's own virtual file
-  system, rather than independently parsing MO2/Vortex instance data; the Options tab's
-  translation system and theme/restart handling) mirrors
-  [AutoSeasons](https://github.com/Cl3mus33/AutoSeasons) by Cl3mus33 (GPLv3), itself derived from
-  [PGPatcher](https://github.com/hakasapl/PGPatcher) by hakasapl (GPLv3).
+- [PGPatcher](https://github.com/hakasapl/PGPatcher) by hakasapl (GPLv3).
 - [Base Object Swapper](https://www.nexusmods.com/skyrimspecialedition/mods/60805) by fenix31415 /
   powerof3, the SKSE plugin this tool manages ini priority for.
 - [CLI11](https://github.com/CLIUtils/CLI11), [spdlog](https://github.com/gabime/spdlog),
