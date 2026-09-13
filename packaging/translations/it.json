@@ -6,7 +6,7 @@
       "options": "Opzioni"
     },
     "intro": "Permette di impostare un ordine di priorità esplicito per i file *_SWAP.ini di Base Object Swapper, invece di affidarsi alla regola alfabetica nativa di BOS.",
-    "warning": "Se usi Mod Organizer 2 o Vortex, avvia BOSPriority dalla sua lista di eseguibili/dashboard, non facendo doppio clic sull'exe in Esplora risorse - altrimenti vedrà solo la tua cartella Data reale, non le mod installate.",
+    "warning": "Se usi Mod Organizer 2 o Vortex, avvia INIPriority dalla sua lista di eseguibili/dashboard, non facendo doppio clic sull'exe in Esplora risorse - altrimenti vedrà solo la tua cartella Data reale, non le mod installate.",
     "gameLocation": {
       "label": "Posizione del gioco (cartella contenente Data\\)",
       "dialogTitle": "Seleziona la posizione del gioco (cartella contenente Data)"
@@ -34,7 +34,7 @@
   },
   "log": {
     "gameLocationHint": "Imposta \"Posizione del gioco\" sulla cartella che contiene Data\\ (la tua installazione di Skyrim, o dove il tuo mod manager avvia il gioco) - non la cartella dell'istanza MO2.",
-    "usvfsHint": "BOSPriority legge questa cartella esattamente come farebbe il gioco: avviato tramite MO2/Vortex, questo percorso mostra già la tua vista fusa delle mod; non serve risolvere separatamente dove si trovano l'istanza o le cartelle delle mod.",
+    "usvfsHint": "INIPriority legge questa cartella esattamente come farebbe il gioco: avviato tramite MO2/Vortex, questo percorso mostra già la tua vista fusa delle mod; non serve risolvere separatamente dove si trovano l'istanza o le cartelle delle mod.",
     "pickGameLocation": "Scegli prima una posizione del gioco.",
     "pickOutputLocation": "Scegli prima una cartella di output.",
     "spidScanResult": "Scansione SPID: %d gruppo/i Outfit/SleepOutfit/Skin trovato/i, %d in conflitto.",
@@ -55,8 +55,8 @@
   "dialog": {
     "nothingToManage": {
       "title": "Niente da gestire",
-      "message": "Scansione automatica completata, nessun conflitto trovato - BOS produrrà già il risultato corretto direttamente da questi file, non serve generare nulla. Generare un unico ini consolidato resta possibile se ne vuoi uno (ad es. per riordinare una modlist), ma è del tutto facoltativo. Chiudere BOSPriority?",
-      "close": "Chiudi BOSPriority",
+      "message": "Scansione automatica completata, nessun conflitto trovato - BOS produrrà già il risultato corretto direttamente da questi file, non serve generare nulla. Generare un unico ini consolidato resta possibile se ne vuoi uno (ad es. per riordinare una modlist), ma è del tutto facoltativo. Chiudere INIPriority?",
+      "close": "Chiudi INIPriority",
       "keepOpen": "Lascia aperto"
     }
   },

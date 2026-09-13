@@ -6,7 +6,7 @@
       "options": "Options"
     },
     "intro": "Lets you set an explicit priority order for Base Object Swapper *_SWAP.ini files, instead of relying on BOS's own alphabetical-filename rule.",
-    "warning": "If you use Mod Organizer 2 or Vortex, run BOSPriority through its tool list/dashboard, not by double-clicking the exe in Explorer - otherwise it only sees your real Data folder, not your installed mods.",
+    "warning": "If you use Mod Organizer 2 or Vortex, run INIPriority through its tool list/dashboard, not by double-clicking the exe in Explorer - otherwise it only sees your real Data folder, not your installed mods.",
     "gameLocation": {
       "label": "Game Location (folder containing Data\\)",
       "dialogTitle": "Select Game Location (folder containing Data)"
@@ -34,7 +34,7 @@
   },
   "log": {
     "gameLocationHint": "Point \"Game Location\" at the folder that contains Data\\ (your Skyrim install, or wherever your mod manager launches the game from) - not the MO2 instance folder.",
-    "usvfsHint": "BOSPriority reads it exactly like the game would: if launched through MO2/Vortex, that path transparently shows your merged mod view; there is no need to separately resolve where your instance or mods folders live.",
+    "usvfsHint": "INIPriority reads it exactly like the game would: if launched through MO2/Vortex, that path transparently shows your merged mod view; there is no need to separately resolve where your instance or mods folders live.",
     "pickGameLocation": "Pick a Game Location first.",
     "pickOutputLocation": "Pick an output folder first.",
     "spidScanResult": "SPID scan: %d Outfit/SleepOutfit/Skin group(s) found, %d in conflict.",
@@ -57,13 +57,13 @@
   "dialog": {
     "nothingToManage": {
       "title": "Nothing to manage",
-      "message": "Scanned automatically and found no conflicts - BOS will already produce the correct result directly from these files, nothing needs generating. Generating a single consolidated ini is still there if you want one (e.g. to tidy up a modlist), but it's entirely optional. Close BOSPriority?",
-      "close": "Close BOSPriority",
+      "message": "Scanned automatically and found no conflicts - BOS will already produce the correct result directly from these files, nothing needs generating. Generating a single consolidated ini is still there if you want one (e.g. to tidy up a modlist), but it's entirely optional. Close INIPriority?",
+      "close": "Close INIPriority",
       "keepOpen": "Keep Open"
     },
     "outputActive": {
       "title": "Output mod appears to be active",
-      "message": "Found %d file(s) in Data that are BOSPriority's own previous output (blanked originals, or AIO_SWAP.ini). This almost always means your Output mod is currently enabled in your mod manager - while it is, BOSPriority only sees its own blanked files instead of the real ones, so this scan will find far fewer conflicts than actually exist (possibly none). Disable the Output mod, then scan again."
+      "message": "Found %d file(s) in Data that are INIPriority's own previous output (blanked originals, or AIO_SWAP.ini). This almost always means your Output mod is currently enabled in your mod manager - while it is, INIPriority only sees its own blanked files instead of the real ones, so this scan will find far fewer conflicts than actually exist (possibly none). Disable the Output mod, then scan again."
     },
     "scanning": {
       "title": "Scanning...",

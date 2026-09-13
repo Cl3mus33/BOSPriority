@@ -22,7 +22,7 @@ public:
     /// included as one of them where it applies) - CONFLICT_ALL_TYPES_KEY is always added as the
     /// first entry regardless.
     /// initialPriorities: a previously-saved ranking to start from (e.g. loaded from
-    /// BOSPriority_priorities.json) - a type present here shows its saved order (any file no
+    /// INIPriority_priorities.json) - a type present here shows its saved order (any file no
     /// longer in allFiles is dropped, any file in allFiles not yet ranked is appended); a type
     /// absent from it behaves as if never customized, same as before this parameter existed.
     TypePriorityDialog(wxWindow* parent, std::vector<std::string> allFiles, std::vector<std::string> types,

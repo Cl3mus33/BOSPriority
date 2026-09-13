@@ -27,7 +27,7 @@ namespace fs = std::filesystem;
 
 namespace {
 
-constexpr const wchar_t* SETTINGS_FILE_NAME = L"BOSPriority_settings.json";
+constexpr const wchar_t* SETTINGS_FILE_NAME = L"INIPriority_settings.json";
 
 // True when this process owns its console alone (double-clicked from Explorer, or launched by
 // MO2/a similar tool that spawns a fresh console) rather than run from an existing terminal. Used
@@ -55,7 +55,7 @@ auto getExecutableDir() -> fs::path
     return fs::path(buffer.data()).parent_path();
 }
 
-struct BOSPriorityCLIArgs {
+struct INIPriorityCLIArgs {
     string gameDir;
     string outputDir;
     vector<string> filePriority; // filenames, lowest applied priority first - fallback only,
@@ -65,7 +65,7 @@ struct BOSPriorityCLIArgs {
     int verbosity = 0;
 };
 
-void addArguments(CLI::App& app, BOSPriorityCLIArgs& args)
+void addArguments(CLI::App& app, INIPriorityCLIArgs& args)
 {
     app.add_flag("-v", args.verbosity, "Verbosity level -v for DEBUG data or -vv for TRACE data");
     app.add_option("game-dir", args.gameDir,
@@ -76,11 +76,11 @@ void addArguments(CLI::App& app, BOSPriorityCLIArgs& args)
     // default_val, not default_str: the latter only changes the help text, leaving outputDir empty
     // when the argument is omitted - which then fails in create_directories("") instead of using
     // the default this has always advertised.
-    app.add_option("output", args.outputDir, "Output directory")->default_val("BOSPriority_Output");
+    app.add_option("output", args.outputDir, "Output directory")->default_val("INIPriority_Output");
     app.add_option("--file-priority", args.filePriority,
                    "*_SWAP.ini filenames, comma-separated, lowest priority first - fallback used "
                    "only for conflicting keys that have no saved decision (see the GUI's Manage "
-                   "Conflicts table, saved as BOSPriority_decisions.json in the output folder). "
+                   "Conflicts table, saved as INIPriority_decisions.json in the output folder). "
                    "Per-key winner/exclude edits are GUI-only, same as AutoSeasons' own "
                    "config-file-only per-type overrides.")
         ->delimiter(',');
@@ -151,8 +151,8 @@ void applyFilePriorityFallback(vector<SwapKey>& keys, const vector<string>& file
 
 auto runCLI(int argC, char** argV) -> int
 {
-    BOSPriorityCLIArgs args;
-    CLI::App app {"BOSPriority: lets you set explicit priority for Base Object Swapper ini files"};
+    INIPriorityCLIArgs args;
+    CLI::App app {"INIPriority: lets you set explicit priority for Base Object Swapper ini files"};
     addArguments(app, args);
 
     try {
@@ -166,7 +166,7 @@ auto runCLI(int argC, char** argV) -> int
     }
 
     const vector<spdlog::sink_ptr> sinks {make_shared<spdlog::sinks::stdout_color_sink_mt>()};
-    auto logger = make_shared<spdlog::logger>("bospriority", sinks.begin(), sinks.end());
+    auto logger = make_shared<spdlog::logger>("inipriority", sinks.begin(), sinks.end());
     spdlog::set_default_logger(logger);
     spdlog::set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] %v");
     if (args.verbosity >= 1) {
@@ -193,7 +193,7 @@ auto runCLI(int argC, char** argV) -> int
         spdlog::info("Found {} key(s), {} in conflict.", keys.size(), conflictCount);
 
         // Broadest to most specific, each later step overwriting exactly the keys it has an
-        // opinion on: a saved "Set Priority by Type" ranking (BOSPriority_priorities.json, set
+        // opinion on: a saved "Set Priority by Type" ranking (INIPriority_priorities.json, set
         // via the GUI) first, then --file-priority is documented as applying only where there's
         // no saved per-key decision, and applyDecisions() overwrites the selection for exactly
         // the keys it does have one for - running the last two the other way round let
@@ -255,7 +255,7 @@ auto loadInitialParams(const fs::path& exeDir) -> LauncherWindow::InitParams
         }
     }
 
-    BOSLocale::init(exeDir / "BOSPriority_translations", uiLanguage);
+    BOSLocale::init(exeDir / "INIPriority_translations", uiLanguage);
     return params;
 }
 
@@ -326,7 +326,7 @@ auto runGUI() -> int
         STARTUPINFOW startupInfo {};
         startupInfo.cb = sizeof(startupInfo);
         PROCESS_INFORMATION processInfo {};
-        const auto exeFullPath = (exeDir / "BOSPriority.exe").wstring();
+        const auto exeFullPath = (exeDir / "INIPriority.exe").wstring();
         const auto workingDir = exeDir.wstring();
         if (CreateProcessW(exeFullPath.c_str(), nullptr, nullptr, nullptr, FALSE, 0, nullptr, workingDir.c_str(),
                 &startupInfo, &processInfo)
@@ -335,14 +335,14 @@ auto runGUI() -> int
             CloseHandle(processInfo.hThread);
         } else {
             const auto errorCode = GetLastError();
-            cerr << "Failed to restart BOSPriority for the new theme (error " << errorCode << ").\n";
+            cerr << "Failed to restart INIPriority for the new theme (error " << errorCode << ").\n";
             // The console window is minimized during normal GUI use (see above), so cerr alone
             // would leave a windowed user watching the app silently vanish with no explanation.
             wxMessageBox(wxString::Format(
-                "BOSPriority couldn't restart itself to apply the new theme (error %lu). "
+                "INIPriority couldn't restart itself to apply the new theme (error %lu). "
                 "Please relaunch it manually - your settings were already saved.",
                 errorCode),
-                "BOSPriority", wxOK | wxICON_ERROR);
+                "INIPriority", wxOK | wxICON_ERROR);
         }
     }
 

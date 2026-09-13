@@ -88,13 +88,13 @@ struct SwapKey {
 
 /// Filename used to persist winner/exclude decisions in an output folder - shared between the GUI
 /// and the CLI so both read/write the exact same file.
-inline constexpr const wchar_t* BOS_PRIORITY_DECISIONS_FILE_NAME = L"BOSPriority_decisions.json";
+inline constexpr const wchar_t* BOS_PRIORITY_DECISIONS_FILE_NAME = L"INIPriority_decisions.json";
 
 /// Filename used to persist the "Set Priority by Type" file ranking - kept separate from
-/// BOSPriority_decisions.json because it isn't an answer to a specific key: it's reapplied fresh
+/// INIPriority_decisions.json because it isn't an answer to a specific key: it's reapplied fresh
 /// after every scan (see applyTypePriorities()), so it naturally keeps resolving conflicts that
 /// didn't exist when it was set, rather than needing its own touched/untouched tracking.
-inline constexpr const wchar_t* BOS_PRIORITY_TYPE_RANKING_FILE_NAME = L"BOSPriority_priorities.json";
+inline constexpr const wchar_t* BOS_PRIORITY_TYPE_RANKING_FILE_NAME = L"INIPriority_priorities.json";
 
 struct BosMergeStats {
     int filesRead = 0;
@@ -119,7 +119,7 @@ struct BosMergeStats {
  * contributed exactly one line to the output; on any mismatch it aborts without touching
  * anything, rather than risk silently dropping a swap rule.
  *
- * scan() ignores any file that is itself a previous BOSPriority output (empty, or starting with
+ * scan() ignores any file that is itself a previous INIPriority output (empty, or starting with
  * one of this tool's own marker comments) so re-scanning after a generate doesn't pick up its own
  * blanked stand-ins or AIO_SWAP.ini as if they were new source mods.
  *

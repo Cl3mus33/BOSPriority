@@ -26,7 +26,7 @@ public:
     /// keys: the full scan() result (conflicts and non-conflicts alike). Non-conflicting entries
     /// pass through untouched; only conflicting ones can be edited here.
     /// outputDir: where a "Set Priority by Type" ranking is loaded from and saved to
-    /// (BOSPriority_priorities.json, alongside BOSPriority_decisions.json).
+    /// (INIPriority_priorities.json, alongside INIPriority_decisions.json).
     ConflictTableDialog(wxWindow* parent, std::vector<SwapKey> keys, std::filesystem::path outputDir);
 
     /// The full key set, with any winner/exclude edits applied.

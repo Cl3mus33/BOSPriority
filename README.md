@@ -1,4 +1,4 @@
-# BOSPriority
+# INIPriority
 
 A standalone tool for Skyrim Special Edition that lets you set an explicit priority order for
 [Base Object Swapper](https://www.nexusmods.com/skyrimspecialedition/mods/60805) (BOS)
@@ -10,7 +10,7 @@ BOS merges every `Data\*_SWAP.ini` in your load order itself, at runtime - but w
 disagree about the same swap, the winner is whichever filename sorts last alphabetically. That's
 rarely what you actually want.
 
-Point BOSPriority at your **Game Location** (the folder containing `Data\` - same thing AutoSeasons
+Point INIPriority at your **Game Location** (the folder containing `Data\` - same thing AutoSeasons
 asks for) and it will:
 
 - Scan for every `*_SWAP.ini` directly under `Data\`.
@@ -28,11 +28,11 @@ asks for) and it will:
   again unless something new shows up.
 - Run fully offline against your files - it never touches the running game.
 
-BOSPriority only manages **existing** BOS ini files. It does not generate BOS entries from ESPs.
+INIPriority only manages **existing** BOS ini files. It does not generate BOS entries from ESPs.
 
 ### Why "Game Location" and not an MO2 instance folder
 
-BOSPriority reads `Data\` exactly like the game itself would. When launched through MO2 or
+INIPriority reads `Data\` exactly like the game itself would. When launched through MO2 or
 Vortex's tool list, the OS-level virtual file system those tools set up (USVFS) transparently
 shows the merged view of every installed mod at that same path - there is no need to separately
 resolve where your MO2 instance or mods folders physically live, which breaks in the very common
@@ -50,7 +50,7 @@ it otherwise holds nothing but a loose exe (no `Data\`-mirroring structure).
 
 ## ⚠️ Run it through your mod manager, not by double-clicking the exe
 
-If you double-click `BOSPriority.exe` directly from Explorer, it only sees your game's real,
+If you double-click `INIPriority.exe` directly from Explorer, it only sees your game's real,
 unmodified Data folder - not your installed mods. USVFS only applies to processes MO2/Vortex
 themselves launch, same caveat as any other tool in this family (xEdit, AutoSeasons, etc).
 
@@ -58,8 +58,8 @@ themselves launch, same caveat as any other tool in this family (xEdit, AutoSeas
 
 1. **Game Location**: the folder containing `Data\` - your Skyrim install directory, or wherever
    your mod manager launches the game from. Not the MO2 instance folder.
-2. **Output Location**: a folder BOSPriority writes `AIO_SWAP.ini` into - make this its own mod
-   entry in your manager (e.g. "BOSPriority Output"), placed last in your load order so nothing
+2. **Output Location**: a folder INIPriority writes `AIO_SWAP.ini` into - make this its own mod
+   entry in your manager (e.g. "INIPriority Output"), placed last in your load order so nothing
    else overrides it.
 3. Click **Scan Mods**.
 4. If any keys conflict, **Manage Conflicts...** opens a table - filter by type, select a
@@ -83,18 +83,18 @@ themselves launch, same caveat as any other tool in this family (xEdit, AutoSeas
 > **Disable the output mod before your next Scan.** Once it's enabled, its blanked stand-ins sit
 > in the merged Data view under the same filenames as the real source inis, so a rescan sees mostly
 > its own already-blanked output instead of the mods it needs to read - conflicts you know exist
-> can disappear from the table entirely. BOSPriority detects this (a warning appears if it finds
+> can disappear from the table entirely. INIPriority detects this (a warning appears if it finds
 > its own output still present) and tells you to disable it, but it's simplest to just disable the
 > output mod any time you're about to rescan, and re-enable it once you're done.
 
 ### Keep your mod load order aligned with your BOS priority choices
 
-BOSPriority only resolves disagreements between `_SWAP.ini` files - it deliberately doesn't check
+INIPriority only resolves disagreements between `_SWAP.ini` files - it deliberately doesn't check
 whether the mod you pick as a winner is also "winning" everywhere else that matters (its plugin's
 own records, its meshes, its textures). If mod X's swap target is itself overwritten somewhere
 else in your load order - another plugin editing the same record, or another mod's loose files
 replacing X's mesh/texture at the same path - the swap can end up using something other than what
-you picked here, even though BOSPriority did exactly what you asked.
+you picked here, even though INIPriority did exactly what you asked.
 
 In practice this is rarely an issue: BOS rules almost always target base vanilla objects broadly,
 not something another specific mod has directly overwritten. But to keep the two systems agreeing
@@ -106,9 +106,9 @@ a swap should also be the one your manager lets win everywhere else.
 
 - **Language**: English, Deutsch, Español, Français, Italiano, or Português (Brasil). Changing it
   rebuilds the window immediately (no restart) - translation files live in
-  `BOSPriority_translations/` next to the exe, one JSON per language; a missing/incomplete
+  `INIPriority_translations/` next to the exe, one JSON per language; a missing/incomplete
   translation always falls back to English for that string.
-- **Theme**: System, Light, or Dark. Changing it **restarts BOSPriority** (a real Windows
+- **Theme**: System, Light, or Dark. Changing it **restarts INIPriority** (a real Windows
   limitation, not a bug: once dark-mode control rendering is turned on for a process it can't be
   reliably turned back off in the same process, so a clean process is the only way to guarantee
   "Light" stays fully light). Note that Windows' own dark-mode support in wxWidgets is still
@@ -118,11 +118,11 @@ a swap should also be the one your manager lets win everywhere else.
 ### Command-line / automation
 
 ```
-BOSPriority.exe <game-dir> [output] --file-priority "ModA_SWAP.ini,ModB_SWAP.ini" [--dry-run] [-v|-vv]
+INIPriority.exe <game-dir> [output] --file-priority "ModA_SWAP.ini,ModB_SWAP.ini" [--dry-run] [-v|-vv]
 ```
 
 `game-dir` is the Game Location described above (not an MO2 instance folder). Per-key winner/
-exclude decisions are GUI-only (saved to `BOSPriority_decisions.json` in the output folder, same
+exclude decisions are GUI-only (saved to `INIPriority_decisions.json` in the output folder, same
 file the CLI reads); `--file-priority` is a fallback used only for conflicts with no saved
 decision - `*_SWAP.ini` filenames, comma-separated, lowest priority first.
 
@@ -134,8 +134,8 @@ Requirements:
 - CMake 3.31+
 
 ```bash
-git clone https://github.com/<your-username>/BOSPriority.git
-cd BOSPriority
+git clone https://github.com/<your-username>/INIPriority.git
+cd INIPriority
 cmake -B buildRelease -S . -DCMAKE_TOOLCHAIN_FILE=<path-to-vcpkg>/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build buildRelease --config RelWithDebInfo
 ```
@@ -150,5 +150,5 @@ cmake --build buildRelease --config RelWithDebInfo
 
 ## License
 
-GPLv3 - see [LICENSE](LICENSE). BOSPriority reuses ideas adapted
+GPLv3 - see [LICENSE](LICENSE). INIPriority reuses ideas adapted
 from AutoSeasons/PGPatcher, both also GPLv3-licensed.

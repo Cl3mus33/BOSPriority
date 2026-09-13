@@ -23,7 +23,7 @@ struct SpidEntry {
 };
 
 /// Every SpidEntry sharing the same record type AND the same (normalized) filter fields - i.e.
-/// entries that target exactly the same NPC audience. Grouping key mirrors BOSPriority's own
+/// entries that target exactly the same NPC audience. Grouping key mirrors INIPriority's own
 /// "same key" rule for BOS, just built from SPID's richer filter set instead of a single key
 /// field - see SpidDistrMerger::scan()'s doc comment for why exact-match is used instead of a
 /// full filter-overlap simulation.

@@ -30,7 +30,7 @@ constexpr int ID_LANGUAGE = wxID_HIGHEST + 15;
 constexpr int ID_THEME = wxID_HIGHEST + 16;
 constexpr int ID_SCAN_SPID = wxID_HIGHEST + 17;
 
-constexpr const wchar_t* SETTINGS_FILE_NAME = L"BOSPriority_settings.json";
+constexpr const wchar_t* SETTINGS_FILE_NAME = L"INIPriority_settings.json";
 constexpr int BORDER_SIZE = 5;
 
 const wxColour ACCENT_DARK(27, 94, 32); // header banner background
@@ -65,11 +65,11 @@ auto countConflicts(const vector<SwapKey>& keys) -> ptrdiff_t
 } // namespace
 
 LauncherWindow::LauncherWindow(const InitParams& initParams)
-    : wxDialog(nullptr, wxID_ANY, "BOSPriority", wxDefaultPosition, wxSize(680, 600),
+    : wxDialog(nullptr, wxID_ANY, "INIPriority", wxDefaultPosition, wxSize(680, 600),
                wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
     , m_theme(initParams.theme)
 {
-    // IDI_APPICON is embedded via packaging/icon/BOSPriority.rc, which also makes it the exe's own
+    // IDI_APPICON is embedded via packaging/icon/INIPriority.rc, which also makes it the exe's own
     // icon in Explorer/the taskbar automatically - this just additionally puts it in the title bar,
     // which a wxDialog (unlike wxFrame) doesn't pick up on its own.
     SetIcon(wxIcon("IDI_APPICON"));
@@ -79,7 +79,7 @@ LauncherWindow::LauncherWindow(const InitParams& initParams)
     auto* headerPanel = new wxPanel(this);
     headerPanel->SetBackgroundColour(ACCENT_DARK);
     auto* headerSizer = new wxBoxSizer(wxHORIZONTAL);
-    auto* headerTitle = new wxStaticText(headerPanel, wxID_ANY, "BOSPriority");
+    auto* headerTitle = new wxStaticText(headerPanel, wxID_ANY, "INIPriority");
     wxFont headerFont = headerTitle->GetFont();
     headerFont.SetPointSize(headerFont.GetPointSize() + 4);
     headerFont.SetWeight(wxFONTWEIGHT_BOLD);
@@ -104,7 +104,7 @@ LauncherWindow::LauncherWindow(const InitParams& initParams)
 
     auto* warning = new wxStaticText(generalPanel, wxID_ANY,
         BOSTr("launcher.warning",
-            "If you use Mod Organizer 2 or Vortex, run BOSPriority through its tool list/dashboard, "
+            "If you use Mod Organizer 2 or Vortex, run INIPriority through its tool list/dashboard, "
             "not by double-clicking the exe in Explorer - otherwise it only sees your real Data "
             "folder, not your installed mods."));
     warning->SetForegroundColour(wxColour(180, 95, 0)); // amber - distinct from ACCENT, reads as caution
@@ -221,7 +221,7 @@ LauncherWindow::LauncherWindow(const InitParams& initParams)
         "Point \"Game Location\" at the folder that contains Data\\ (your Skyrim install, or "
         "wherever your mod manager launches the game from) - not the MO2 instance folder."));
     log(BOSTr("log.usvfsHint",
-        "BOSPriority reads it exactly like the game would: if launched through MO2/Vortex, that "
+        "INIPriority reads it exactly like the game would: if launched through MO2/Vortex, that "
         "path transparently shows your merged mod view; there is no need to separately resolve "
         "where your instance or mods folders live."));
 
@@ -357,16 +357,16 @@ void LauncherWindow::performScan(function<void()> onComplete)
                 // scan() already safely ignores its own previous output (blanked stand-ins,
                 // AIO_SWAP.ini) - but if any showed up in Data at all, it almost certainly means
                 // the Output mod is currently ENABLED in the mod manager, masking every original
-                // source ini it already blanked. Left undetected this looks like "BOSPriority
+                // source ini it already blanked. Left undetected this looks like "INIPriority
                 // stopped finding conflicts" with no obvious cause.
                 if (const auto activeOutputCount = BOSIniMerger::countActiveOutputFiles(gameDir);
                     activeOutputCount > 0) {
                     const wxString message = wxString::Format(
                         BOSTr("dialog.outputActive.message",
-                            "Found %d file(s) in Data that are BOSPriority's own previous output "
+                            "Found %d file(s) in Data that are INIPriority's own previous output "
                             "(blanked originals, or AIO_SWAP.ini). This almost always means your "
                             "Output mod is currently enabled in your mod manager - while it is, "
-                            "BOSPriority only sees its own blanked files instead of the real ones, "
+                            "INIPriority only sees its own blanked files instead of the real ones, "
                             "so this scan will find far fewer conflicts than actually exist "
                             "(possibly none). Disable the Output mod, then scan again."),
                         activeOutputCount);
@@ -470,9 +470,9 @@ void LauncherWindow::autoScanOnLaunch()
                 "Scanned automatically and found no conflicts - BOS will already produce the correct "
                 "result directly from these files, nothing needs generating. Generating a single "
                 "consolidated ini is still there if you want one (e.g. to tidy up a modlist), but it's "
-                "entirely optional. Close BOSPriority?"),
+                "entirely optional. Close INIPriority?"),
             BOSTr("dialog.nothingToManage.title", "Nothing to manage"), wxYES_NO | wxICON_INFORMATION);
-        dlg.SetYesNoLabels(BOSTr("dialog.nothingToManage.close", "Close BOSPriority"),
+        dlg.SetYesNoLabels(BOSTr("dialog.nothingToManage.close", "Close INIPriority"),
                             BOSTr("dialog.nothingToManage.keepOpen", "Keep Open"));
         if (dlg.ShowModal() == wxID_YES) {
             EndModal(wxID_CANCEL);
@@ -548,7 +548,7 @@ void LauncherWindow::onLanguageChanged(wxCommandEvent& /*event*/)
         return;
     }
 
-    BOSLocale::init(getExecutableDir() / "BOSPriority_translations", selectedLang.code);
+    BOSLocale::init(getExecutableDir() / "INIPriority_translations", selectedLang.code);
     saveSettings();
     EndModal(RESULT_RELAUNCH);
 }

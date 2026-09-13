@@ -4,7 +4,7 @@
 
 Initial release.
 
-BOSPriority is a standalone tool for Skyrim Special Edition that lets you set an explicit
+INIPriority is a standalone tool for Skyrim Special Edition that lets you set an explicit
 priority order for [Base Object Swapper](https://www.nexusmods.com/skyrimspecialedition/mods/60805)
 (BOS) `*_SWAP.ini` files, instead of relying on BOS's own alphabetical-filename tie-break rule.
 

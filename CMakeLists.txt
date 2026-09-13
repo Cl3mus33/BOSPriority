@@ -3,7 +3,7 @@ cmake_minimum_required (VERSION 3.31)
 #
 # Project
 #
-set(PROJECT_NAME "BOSPriority")
+set(PROJECT_NAME "INIPriority")
 
 # vcpkg's overlay triplet (triplets/x64-windows.cmake) builds every dependency with a static CRT
 # (VCPKG_CRT_LINKAGE static), so our own target must match or the link step mismatches (LNK2038)
@@ -49,12 +49,12 @@ file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/*.cpp)
 # Plain console subsystem (same as AutoSeasons/CMakeLists.txt) - the GUI still opens fine from a
 # console-subsystem exe, and CLI/automation use (spdlog output, --help, etc.) needs the console
 # that a WIN32-subsystem exe wouldn't have without extra AllocConsole plumbing.
-# packaging/icon/BOSPriority.rc embeds the app icon (taskbar, Explorer, Alt-Tab, title bar) -
+# packaging/icon/INIPriority.rc embeds the app icon (taskbar, Explorer, Alt-Tab, title bar) -
 # MSVC's resource compiler picks up a .rc source automatically once it's part of the target.
 add_executable(${PROJECT_NAME}
     ${SOURCES}
     ${HEADERS}
-    packaging/icon/BOSPriority.rc
+    packaging/icon/INIPriority.rc
 )
 target_compile_options(${PROJECT_NAME} PRIVATE /utf-8)
 target_include_directories(${PROJECT_NAME} PUBLIC include)
@@ -81,12 +81,12 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE ${wxWidgets_DEFINITIONS})
 # No VC Redist DLL copy step: CMAKE_MSVC_RUNTIME_LIBRARY above statically links the CRT into
 # the executable, so msvcp140/vcruntime140/concrt140/vccorlib140 aren't runtime dependencies.
 
-# BOSLocale reads its JSONs from a "BOSPriority_translations" folder next to the exe at runtime.
+# BOSLocale reads its JSONs from a "INIPriority_translations" folder next to the exe at runtime.
 # Copying them on every build keeps a locally built exe behaving like a packaged release - without
 # this the build output only ever has whatever was hand-copied there once, so an edited or newly
 # added translation key silently appears to do nothing when testing locally.
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_CURRENT_SOURCE_DIR}/packaging/translations"
-        "$<TARGET_FILE_DIR:${PROJECT_NAME}>/BOSPriority_translations"
+        "$<TARGET_FILE_DIR:${PROJECT_NAME}>/INIPriority_translations"
     COMMENT "Copying translation files next to the executable")
