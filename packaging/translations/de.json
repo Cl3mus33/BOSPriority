@@ -19,6 +19,7 @@
     "scanButton": "Mods scannen",
     "manageConflictsButton": "Konflikte verwalten...",
     "generateButton": "Generieren",
+    "scanSpidButton": "SPID-Konflikte scannen (Beta)",
     "logLabel": "Protokoll",
     "browse": "Durchsuchen...",
     "language": {
@@ -36,6 +37,7 @@
     "usvfsHint": "BOSPriority liest diesen Ordner genau wie das Spiel selbst: über MO2/Vortex gestartet zeigt dieser Pfad bereits deine zusammengeführte Mod-Ansicht; es ist nicht nötig, Instanz- oder Mod-Ordner separat aufzulösen.",
     "pickGameLocation": "Wähle zuerst einen Spielort.",
     "pickOutputLocation": "Wähle zuerst einen Zielordner.",
+    "spidScanResult": "SPID-Scan: %d Outfit/SleepOutfit/Skin-Gruppe(n) gefunden, %d im Konflikt.",
     "foundKeys": "%zu Schlüssel gefunden, %lld im Konflikt.",
     "noConflictsHint": "Keine Konflikte - BOS erzeugt bereits direkt aus diesen Dateien das korrekte Ergebnis, nichts muss generiert werden. Generieren bleibt verfügbar, falls du nur eine einzelne konsolidierte ini möchtest (z. B. zum Aufräumen einer Modliste), ist aber optional.",
     "decisionsSaved": "Konfliktentscheidungen aktualisiert und gespeichert - werden beim nächsten Scan dieses Zielordners übernommen.",

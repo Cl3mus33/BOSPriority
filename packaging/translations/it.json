@@ -19,6 +19,7 @@
     "scanButton": "Scansiona mod",
     "manageConflictsButton": "Gestisci conflitti...",
     "generateButton": "Genera",
+    "scanSpidButton": "Scansiona conflitti SPID (beta)",
     "logLabel": "Registro",
     "browse": "Sfoglia...",
     "language": {
@@ -36,6 +37,7 @@
     "usvfsHint": "BOSPriority legge questa cartella esattamente come farebbe il gioco: avviato tramite MO2/Vortex, questo percorso mostra già la tua vista fusa delle mod; non serve risolvere separatamente dove si trovano l'istanza o le cartelle delle mod.",
     "pickGameLocation": "Scegli prima una posizione del gioco.",
     "pickOutputLocation": "Scegli prima una cartella di output.",
+    "spidScanResult": "Scansione SPID: %d gruppo/i Outfit/SleepOutfit/Skin trovato/i, %d in conflitto.",
     "foundKeys": "%zu chiave/i trovata/e, %lld in conflitto.",
     "noConflictsHint": "Nessun conflitto - BOS produrrà già il risultato corretto direttamente da questi file, non serve generare nulla. Genera resta disponibile se vuoi comunque un unico ini consolidato (ad es. per riordinare una modlist), ma è facoltativo.",
     "decisionsSaved": "Decisioni sui conflitti aggiornate e salvate - verranno ricordate alla prossima scansione di questa cartella di output.",

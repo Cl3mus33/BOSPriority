@@ -1,6 +1,7 @@
 #include "BOSIniMerger.hpp"
 #include "BOSLocale.hpp"
 #include "GUI/LauncherWindow.hpp"
+#include "SpidDistrMerger.hpp"
 #include "StringUtil.hpp"
 
 #include <CLI/CLI.hpp>
@@ -60,6 +61,7 @@ struct BOSPriorityCLIArgs {
     vector<string> filePriority; // filenames, lowest applied priority first - fallback only,
                                   // used for conflicting keys with no saved per-key decision
     bool dryRun = false;
+    bool checkSpid = false;
     int verbosity = 0;
 };
 
@@ -85,6 +87,33 @@ void addArguments(CLI::App& app, BOSPriorityCLIArgs& args)
     app.add_flag("--dry-run", args.dryRun,
                  "Scan and log what would be merged, but write nothing to the output directory")
         ->default_val(false);
+    // Independent of the BOS command above: when set, this only runs the SPID Outfit/SleepOutfit/
+    // Skin conflict report (read-only, no BOS scan/merge at all) - see runCheckSpid().
+    app.add_flag("--check-spid", args.checkSpid,
+                 "Read-only: scan *_DISTR.ini for SPID Outfit/SleepOutfit/Skin conflicts and log "
+                 "them, without touching BOS at all")
+        ->default_val(false);
+}
+
+// Logs every detected SPID conflict group; returns the process exit code. Entirely separate from
+// the BOS scan/merge flow below - this is a diagnostic report only, nothing is written to disk.
+auto runCheckSpid(const fs::path& gameDir) -> int
+{
+    const auto groups = SpidDistrMerger::scan(gameDir);
+    const auto conflictCount = ranges::count_if(groups, [](const auto& g) { return g.isRealConflict(); });
+    spdlog::info("Found {} SPID Outfit/SleepOutfit/Skin group(s), {} in conflict.", groups.size(), conflictCount);
+
+    for (const auto& group : groups) {
+        if (!group.isRealConflict()) {
+            continue;
+        }
+        spdlog::info("[{}] {} candidate(s):", group.recordType, group.candidates.size());
+        for (const auto& entry : group.candidates) {
+            spdlog::info("    {} (chance {}): {}", entry.sourceFile, entry.chance, entry.line);
+        }
+    }
+
+    return 0;
 }
 
 // Runs BEFORE BOSIniMerger::applyDecisions, which then overwrites the selection for every key that
@@ -149,6 +178,14 @@ auto runCLI(int argC, char** argV) -> int
 
     const fs::path gameDir = StringUtil::utf8ToUtf16(args.gameDir);
     const fs::path outputDir = StringUtil::utf8ToUtf16(args.outputDir);
+
+    if (args.checkSpid) {
+        const auto code = runCheckSpid(gameDir);
+        if (isSoleConsoleOwner()) {
+            pauseBeforeExit();
+        }
+        return code;
+    }
 
     try {
         auto keys = BOSIniMerger::scan(gameDir);

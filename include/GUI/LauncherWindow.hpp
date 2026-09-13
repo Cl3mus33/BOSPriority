@@ -39,6 +39,7 @@ private:
     void onScan(wxCommandEvent& event);
     void onManageConflicts(wxCommandEvent& event);
     void onGenerate(wxCommandEvent& event);
+    void onScanSpid(wxCommandEvent& event);
     void onLanguageChanged(wxCommandEvent& event);
     void onThemeChanged(wxCommandEvent& event);
 
@@ -73,6 +74,7 @@ private:
     wxCheckBox* m_dryRunCheck = nullptr;
     wxButton* m_manageConflictsButton = nullptr;
     wxButton* m_generateButton = nullptr;
+    wxButton* m_scanSpidButton = nullptr;
     wxTextCtrl* m_logCtrl = nullptr;
     wxChoice* m_languageChoice = nullptr;
     wxChoice* m_themeChoice = nullptr;

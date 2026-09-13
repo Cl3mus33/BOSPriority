@@ -19,6 +19,7 @@
     "scanButton": "Scan Mods",
     "manageConflictsButton": "Manage Conflicts...",
     "generateButton": "Generate",
+    "scanSpidButton": "Scan SPID Conflicts (beta)",
     "logLabel": "Log",
     "browse": "Browse...",
     "language": {
@@ -36,6 +37,7 @@
     "usvfsHint": "BOSPriority reads it exactly like the game would: if launched through MO2/Vortex, that path transparently shows your merged mod view; there is no need to separately resolve where your instance or mods folders live.",
     "pickGameLocation": "Pick a Game Location first.",
     "pickOutputLocation": "Pick an output folder first.",
+    "spidScanResult": "SPID scan: %d Outfit/SleepOutfit/Skin group(s) found, %d in conflict.",
     "rankingReapplied": "Reapplied saved file-priority ranking (%zu type(s)).",
     "foundKeys": "Found %zu key(s), %lld in conflict.",
     "noConflictsHint": "No conflicts - BOS will already produce the correct result directly from these files, nothing needs generating. Generate is still there if you just want a single consolidated ini (e.g. to tidy up a modlist), but it's optional.",

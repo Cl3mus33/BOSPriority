@@ -2,6 +2,8 @@
 #include "BOSIniMerger.hpp"
 #include "BOSLocale.hpp"
 #include "GUI/ConflictTableDialog.hpp"
+#include "GUI/SpidConflictReportDialog.hpp"
+#include "SpidDistrMerger.hpp"
 #include "StringUtil.hpp"
 
 #include <nlohmann/json.hpp>
@@ -26,6 +28,7 @@ constexpr int ID_MANAGE_CONFLICTS = wxID_HIGHEST + 13;
 constexpr int ID_GENERATE = wxID_HIGHEST + 14;
 constexpr int ID_LANGUAGE = wxID_HIGHEST + 15;
 constexpr int ID_THEME = wxID_HIGHEST + 16;
+constexpr int ID_SCAN_SPID = wxID_HIGHEST + 17;
 
 constexpr const wchar_t* SETTINGS_FILE_NAME = L"BOSPriority_settings.json";
 constexpr int BORDER_SIZE = 5;
@@ -143,6 +146,9 @@ LauncherWindow::LauncherWindow(const InitParams& initParams)
     m_generateButton = new wxButton(generalPanel, ID_GENERATE, BOSTr("launcher.generateButton", "Generate"));
     m_generateButton->Disable();
     actionSizer->Add(m_generateButton, 0, wxALL, BORDER_SIZE);
+    m_scanSpidButton
+        = new wxButton(generalPanel, ID_SCAN_SPID, BOSTr("launcher.scanSpidButton", "Scan SPID Conflicts (beta)"));
+    actionSizer->Add(m_scanSpidButton, 0, wxALL, BORDER_SIZE);
     topSizer->Add(actionSizer, 0, wxLEFT, BORDER_SIZE);
 
     auto* logLabel = makeSectionLabel(generalPanel, BOSTr("launcher.logLabel", "Log"));
@@ -207,6 +213,7 @@ LauncherWindow::LauncherWindow(const InitParams& initParams)
     Bind(wxEVT_BUTTON, &LauncherWindow::onScan, this, ID_SCAN);
     Bind(wxEVT_BUTTON, &LauncherWindow::onManageConflicts, this, ID_MANAGE_CONFLICTS);
     Bind(wxEVT_BUTTON, &LauncherWindow::onGenerate, this, ID_GENERATE);
+    Bind(wxEVT_BUTTON, &LauncherWindow::onScanSpid, this, ID_SCAN_SPID);
     Bind(wxEVT_CHOICE, &LauncherWindow::onLanguageChanged, this, ID_LANGUAGE);
     Bind(wxEVT_CHOICE, &LauncherWindow::onThemeChanged, this, ID_THEME);
 
@@ -397,6 +404,24 @@ void LauncherWindow::onScan(wxCommandEvent& /*event*/)
     }
 
     performScan();
+}
+
+void LauncherWindow::onScanSpid(wxCommandEvent& /*event*/)
+{
+    const fs::path gameDir(m_gamePathCtrl->GetValue().ToStdWstring());
+    if (gameDir.empty()) {
+        log(BOSTr("log.pickGameLocation", "Pick a Game Location first."));
+        return;
+    }
+
+    auto groups = SpidDistrMerger::scan(gameDir);
+    const auto conflictCount = ranges::count_if(groups, [](const auto& g) { return g.isRealConflict(); });
+    log(wxString::Format(
+        BOSTr("log.spidScanResult", "SPID scan: %d Outfit/SleepOutfit/Skin group(s) found, %d in conflict."),
+        static_cast<int>(groups.size()), static_cast<int>(conflictCount)));
+
+    SpidConflictReportDialog dlg(this, std::move(groups));
+    dlg.ShowModal();
 }
 
 void LauncherWindow::saveSettings() const
