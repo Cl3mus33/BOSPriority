@@ -1,6 +1,8 @@
 #include "BOSIniMerger.hpp"
 #include "BOSLocale.hpp"
 #include "GUI/LauncherWindow.hpp"
+#include "LoadOrderFile.hpp"
+#include "PluginIniMerger.hpp"
 #include "SpidDistrMerger.hpp"
 #include "StringUtil.hpp"
 
@@ -62,6 +64,8 @@ struct INIPriorityCLIArgs {
                                   // used for conflicting keys with no saved per-key decision
     bool dryRun = false;
     bool checkSpid = false;
+    bool checkPluginIni = false;
+    string loadOrderFile;
     int verbosity = 0;
 };
 
@@ -93,6 +97,15 @@ void addArguments(CLI::App& app, INIPriorityCLIArgs& args)
                  "Read-only: scan *_DISTR.ini for SPID Outfit/SleepOutfit/Skin conflicts and log "
                  "them, without touching BOS at all")
         ->default_val(false);
+    // Also independent of the BOS command: reports cross-plugin conflicts in Skyrim's own
+    // per-plugin <Plugin>.ini override system (read-only) - see runCheckPluginIni().
+    app.add_flag("--check-plugin-ini", args.checkPluginIni,
+                 "Read-only: scan active plugins' <Plugin>.ini overrides for cross-plugin "
+                 "[Section]+key conflicts (requires --load-order-file), without touching BOS at all")
+        ->default_val(false);
+    app.add_option("--load-order-file", args.loadOrderFile,
+                   "Path to a plugins.txt (load order, one plugin per line, '*' marks active) - "
+                   "required with --check-plugin-ini");
 }
 
 // Logs every detected SPID conflict group; returns the process exit code. Entirely separate from
@@ -110,6 +123,34 @@ auto runCheckSpid(const fs::path& gameDir) -> int
         spdlog::info("[{}] {} candidate(s):", group.recordType, group.candidates.size());
         for (const auto& entry : group.candidates) {
             spdlog::info("    {} (chance {}): {}", entry.sourceFile, entry.chance, entry.line);
+        }
+    }
+
+    return 0;
+}
+
+// Logs every detected per-plugin ini conflict group; returns the process exit code. Entirely
+// separate from the BOS/SPID flows above - diagnostic report only, nothing written to disk.
+auto runCheckPluginIni(const fs::path& gameDir, const fs::path& loadOrderFile) -> int
+{
+    if (loadOrderFile.empty() || !fs::exists(loadOrderFile)) {
+        spdlog::error("--check-plugin-ini requires a valid --load-order-file path.");
+        return 1;
+    }
+
+    const auto loadOrder = LoadOrderFile::load(loadOrderFile);
+    const auto groups = PluginIniMerger::scan(gameDir, loadOrder);
+    const auto conflictCount = ranges::count_if(groups, [](const auto& g) { return g.isRealConflict(); });
+    spdlog::info("Found {} plugin-ini group(s), {} in conflict.", groups.size(), conflictCount);
+
+    for (const auto& group : groups) {
+        if (!group.isRealConflict()) {
+            continue;
+        }
+        spdlog::info("[{}] {} candidate(s):", group.section + "/" + group.key, group.candidates.size());
+        for (const auto& value : group.candidates) {
+            const bool isWinner = &value == &group.candidates.back();
+            spdlog::info("    {} = {}{}", value.sourcePlugin, value.value, isWinner ? "  <-- current winner" : "");
         }
     }
 
@@ -187,6 +228,14 @@ auto runCLI(int argC, char** argV) -> int
         return code;
     }
 
+    if (args.checkPluginIni) {
+        const auto code = runCheckPluginIni(gameDir, StringUtil::utf8ToUtf16(args.loadOrderFile));
+        if (isSoleConsoleOwner()) {
+            pauseBeforeExit();
+        }
+        return code;
+    }
+
     try {
         auto keys = BOSIniMerger::scan(gameDir);
         const auto conflictCount = ranges::count_if(keys, [](const auto& k) { return k.isRealConflict(); });
@@ -243,6 +292,9 @@ auto loadInitialParams(const fs::path& exeDir) -> LauncherWindow::InitParams
             }
             if (json.contains("outputDir") && json["outputDir"].is_string()) {
                 params.outputDir = StringUtil::utf8ToUtf16(json["outputDir"].get<string>());
+            }
+            if (json.contains("loadOrderFilePath") && json["loadOrderFilePath"].is_string()) {
+                params.loadOrderFilePath = StringUtil::utf8ToUtf16(json["loadOrderFilePath"].get<string>());
             }
             if (json.contains("uiLanguage") && json["uiLanguage"].is_string()) {
                 uiLanguage = json["uiLanguage"].get<string>();

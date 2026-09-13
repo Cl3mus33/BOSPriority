@@ -20,6 +20,11 @@
     "manageConflictsButton": "Gestionar conflictos...",
     "generateButton": "Generar",
     "scanSpidButton": "Escanear conflictos SPID (beta)",
+    "scanPluginIniButton": "Escanear conflictos de INI por plugin (beta)",
+    "loadOrderFile": {
+      "label": "Archivo de orden de carga (plugins.txt)",
+      "dialogTitle": "Seleccionar plugins.txt"
+    },
     "logLabel": "Registro",
     "browse": "Examinar...",
     "language": {
@@ -37,6 +42,8 @@
     "usvfsHint": "INIPriority lee esta carpeta exactamente como lo haría el juego: lanzado a través de MO2/Vortex, esa ruta ya muestra tu vista fusionada de mods; no hace falta resolver por separado dónde están tu instancia o tus carpetas de mods.",
     "pickGameLocation": "Elige primero una ubicación del juego.",
     "pickOutputLocation": "Elige primero una carpeta de salida.",
+    "pickLoadOrderFile": "Elige primero un archivo de orden de carga (plugins.txt).",
+    "pluginIniScanResult": "Escaneo de INI por plugin: %d grupo(s) encontrado(s), %d en conflicto.",
     "spidScanResult": "Escaneo SPID: %d grupo(s) Outfit/SleepOutfit/Skin encontrado(s), %d en conflicto.",
     "foundKeys": "%zu clave(s) encontrada(s), %lld en conflicto.",
     "noConflictsHint": "Sin conflictos - BOS ya producirá el resultado correcto directamente a partir de estos archivos, no hace falta generar nada. Generar sigue disponible si solo quieres un ini único consolidado (p. ej. para ordenar una modlist), pero es opcional.",

@@ -2,7 +2,10 @@
 #include "BOSIniMerger.hpp"
 #include "BOSLocale.hpp"
 #include "GUI/ConflictTableDialog.hpp"
+#include "GUI/PluginIniConflictReportDialog.hpp"
 #include "GUI/SpidConflictReportDialog.hpp"
+#include "LoadOrderFile.hpp"
+#include "PluginIniMerger.hpp"
 #include "SpidDistrMerger.hpp"
 #include "StringUtil.hpp"
 
@@ -13,6 +16,7 @@
 #include <exception>
 #include <fstream>
 #include <wx/dirdlg.h>
+#include <wx/filedlg.h>
 #include <wx/notebook.h>
 #include <wx/progdlg.h>
 #include <windows.h>
@@ -29,6 +33,8 @@ constexpr int ID_GENERATE = wxID_HIGHEST + 14;
 constexpr int ID_LANGUAGE = wxID_HIGHEST + 15;
 constexpr int ID_THEME = wxID_HIGHEST + 16;
 constexpr int ID_SCAN_SPID = wxID_HIGHEST + 17;
+constexpr int ID_BROWSE_LOAD_ORDER = wxID_HIGHEST + 18;
+constexpr int ID_SCAN_PLUGIN_INI = wxID_HIGHEST + 19;
 
 constexpr const wchar_t* SETTINGS_FILE_NAME = L"INIPriority_settings.json";
 constexpr int BORDER_SIZE = 5;
@@ -133,6 +139,17 @@ LauncherWindow::LauncherWindow(const InitParams& initParams)
                   BORDER_SIZE);
     topSizer->Add(outSizer, 0, wxEXPAND | wxLEFT | wxRIGHT, BORDER_SIZE);
 
+    auto* loadOrderLabel = makeSectionLabel(
+        generalPanel, BOSTr("launcher.loadOrderFile.label", "Load Order File (plugins.txt)"));
+    topSizer->Add(loadOrderLabel, 0, wxLEFT | wxRIGHT | wxTOP, BORDER_SIZE * 2);
+
+    auto* loadOrderSizer = new wxBoxSizer(wxHORIZONTAL);
+    m_loadOrderPathCtrl = new wxTextCtrl(generalPanel, wxID_ANY, initParams.loadOrderFilePath);
+    loadOrderSizer->Add(m_loadOrderPathCtrl, 1, wxALL | wxEXPAND, BORDER_SIZE);
+    loadOrderSizer->Add(new wxButton(generalPanel, ID_BROWSE_LOAD_ORDER, BOSTr("launcher.browse", "Browse...")), 0,
+                         wxALL, BORDER_SIZE);
+    topSizer->Add(loadOrderSizer, 0, wxEXPAND | wxLEFT | wxRIGHT, BORDER_SIZE);
+
     m_dryRunCheck = new wxCheckBox(generalPanel, wxID_ANY, BOSTr("launcher.dryRun", "Preview only (dry run)"));
     topSizer->Add(m_dryRunCheck, 0, wxALL, BORDER_SIZE * 2);
 
@@ -149,6 +166,9 @@ LauncherWindow::LauncherWindow(const InitParams& initParams)
     m_scanSpidButton
         = new wxButton(generalPanel, ID_SCAN_SPID, BOSTr("launcher.scanSpidButton", "Scan SPID Conflicts (beta)"));
     actionSizer->Add(m_scanSpidButton, 0, wxALL, BORDER_SIZE);
+    m_scanPluginIniButton = new wxButton(
+        generalPanel, ID_SCAN_PLUGIN_INI, BOSTr("launcher.scanPluginIniButton", "Scan Plugin INI Conflicts (beta)"));
+    actionSizer->Add(m_scanPluginIniButton, 0, wxALL, BORDER_SIZE);
     topSizer->Add(actionSizer, 0, wxLEFT, BORDER_SIZE);
 
     auto* logLabel = makeSectionLabel(generalPanel, BOSTr("launcher.logLabel", "Log"));
@@ -214,6 +234,8 @@ LauncherWindow::LauncherWindow(const InitParams& initParams)
     Bind(wxEVT_BUTTON, &LauncherWindow::onManageConflicts, this, ID_MANAGE_CONFLICTS);
     Bind(wxEVT_BUTTON, &LauncherWindow::onGenerate, this, ID_GENERATE);
     Bind(wxEVT_BUTTON, &LauncherWindow::onScanSpid, this, ID_SCAN_SPID);
+    Bind(wxEVT_BUTTON, &LauncherWindow::onBrowseLoadOrder, this, ID_BROWSE_LOAD_ORDER);
+    Bind(wxEVT_BUTTON, &LauncherWindow::onScanPluginIni, this, ID_SCAN_PLUGIN_INI);
     Bind(wxEVT_CHOICE, &LauncherWindow::onLanguageChanged, this, ID_LANGUAGE);
     Bind(wxEVT_CHOICE, &LauncherWindow::onThemeChanged, this, ID_THEME);
 
@@ -247,6 +269,7 @@ auto LauncherWindow::getParams() const -> InitParams
     InitParams params;
     params.gameDir = m_gamePathCtrl->GetValue();
     params.outputDir = m_outputPathCtrl->GetValue();
+    params.loadOrderFilePath = m_loadOrderPathCtrl->GetValue();
     params.theme = m_theme;
     return params;
 }
@@ -279,6 +302,17 @@ void LauncherWindow::onBrowseOutput(wxCommandEvent& /*event*/)
                      m_outputPathCtrl->GetValue());
     if (dlg.ShowModal() == wxID_OK) {
         m_outputPathCtrl->SetValue(dlg.GetPath());
+    }
+}
+
+void LauncherWindow::onBrowseLoadOrder(wxCommandEvent& /*event*/)
+{
+    wxFileDialog dlg(this, BOSTr("launcher.loadOrderFile.dialogTitle", "Select plugins.txt"), "",
+                      m_loadOrderPathCtrl->GetValue(),
+                      "plugins.txt|plugins.txt|Text files (*.txt)|*.txt|All files|*.*",
+                      wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+    if (dlg.ShowModal() == wxID_OK) {
+        m_loadOrderPathCtrl->SetValue(dlg.GetPath());
     }
 }
 
@@ -424,6 +458,29 @@ void LauncherWindow::onScanSpid(wxCommandEvent& /*event*/)
     dlg.ShowModal();
 }
 
+void LauncherWindow::onScanPluginIni(wxCommandEvent& /*event*/)
+{
+    const fs::path gameDir(m_gamePathCtrl->GetValue().ToStdWstring());
+    if (gameDir.empty()) {
+        log(BOSTr("log.pickGameLocation", "Pick a Game Location first."));
+        return;
+    }
+    const fs::path loadOrderPath(m_loadOrderPathCtrl->GetValue().ToStdWstring());
+    if (loadOrderPath.empty()) {
+        log(BOSTr("log.pickLoadOrderFile", "Pick a Load Order File (plugins.txt) first."));
+        return;
+    }
+
+    const auto loadOrder = LoadOrderFile::load(loadOrderPath);
+    auto groups = PluginIniMerger::scan(gameDir, loadOrder);
+    const auto conflictCount = ranges::count_if(groups, [](const auto& g) { return g.isRealConflict(); });
+    log(wxString::Format(BOSTr("log.pluginIniScanResult", "Plugin INI scan: %d group(s) found, %d in conflict."),
+        static_cast<int>(groups.size()), static_cast<int>(conflictCount)));
+
+    PluginIniConflictReportDialog dlg(this, std::move(groups));
+    dlg.ShowModal();
+}
+
 void LauncherWindow::saveSettings() const
 {
     const auto dir = getExecutableDir();
@@ -434,6 +491,7 @@ void LauncherWindow::saveSettings() const
     nlohmann::json json;
     json["gameDir"] = StringUtil::utf16ToUtf8(m_gamePathCtrl->GetValue().ToStdWstring());
     json["outputDir"] = StringUtil::utf16ToUtf8(m_outputPathCtrl->GetValue().ToStdWstring());
+    json["loadOrderFilePath"] = StringUtil::utf16ToUtf8(m_loadOrderPathCtrl->GetValue().ToStdWstring());
     json["uiLanguage"] = BOSLocale::getCurrentLanguage();
     json["uiTheme"] = StringUtil::utf16ToUtf8(m_theme.ToStdWstring());
 

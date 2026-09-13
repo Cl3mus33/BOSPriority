@@ -20,6 +20,11 @@
     "manageConflictsButton": "Manage Conflicts...",
     "generateButton": "Generate",
     "scanSpidButton": "Scan SPID Conflicts (beta)",
+    "scanPluginIniButton": "Scan Plugin INI Conflicts (beta)",
+    "loadOrderFile": {
+      "label": "Load Order File (plugins.txt)",
+      "dialogTitle": "Select plugins.txt"
+    },
     "logLabel": "Log",
     "browse": "Browse...",
     "language": {
@@ -37,6 +42,8 @@
     "usvfsHint": "INIPriority reads it exactly like the game would: if launched through MO2/Vortex, that path transparently shows your merged mod view; there is no need to separately resolve where your instance or mods folders live.",
     "pickGameLocation": "Pick a Game Location first.",
     "pickOutputLocation": "Pick an output folder first.",
+    "pickLoadOrderFile": "Pick a Load Order File (plugins.txt) first.",
+    "pluginIniScanResult": "Plugin INI scan: %d group(s) found, %d in conflict.",
     "spidScanResult": "SPID scan: %d Outfit/SleepOutfit/Skin group(s) found, %d in conflict.",
     "rankingReapplied": "Reapplied saved file-priority ranking (%zu type(s)).",
     "foundKeys": "Found %zu key(s), %lld in conflict.",

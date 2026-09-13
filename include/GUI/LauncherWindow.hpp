@@ -23,6 +23,7 @@ public:
     struct InitParams {
         wxString gameDir;
         wxString outputDir;
+        wxString loadOrderFilePath;
         wxString theme = "system"; // "system" | "light" | "dark"
     };
 
@@ -40,6 +41,8 @@ private:
     void onManageConflicts(wxCommandEvent& event);
     void onGenerate(wxCommandEvent& event);
     void onScanSpid(wxCommandEvent& event);
+    void onBrowseLoadOrder(wxCommandEvent& event);
+    void onScanPluginIni(wxCommandEvent& event);
     void onLanguageChanged(wxCommandEvent& event);
     void onThemeChanged(wxCommandEvent& event);
 
@@ -75,6 +78,8 @@ private:
     wxButton* m_manageConflictsButton = nullptr;
     wxButton* m_generateButton = nullptr;
     wxButton* m_scanSpidButton = nullptr;
+    wxTextCtrl* m_loadOrderPathCtrl = nullptr;
+    wxButton* m_scanPluginIniButton = nullptr;
     wxTextCtrl* m_logCtrl = nullptr;
     wxChoice* m_languageChoice = nullptr;
     wxChoice* m_themeChoice = nullptr;
