@@ -1,8 +1,14 @@
 # INIPriority
 
-A standalone tool for Skyrim Special Edition that lets you set an explicit priority order for
+A standalone tool for Skyrim Special Edition that helps with mod-ini priority/conflict problems
+that come from load-order-dependent overrides. Its main, full-featured capability is
 [Base Object Swapper](https://www.nexusmods.com/skyrimspecialedition/mods/60805) (BOS)
-`*_SWAP.ini` files, instead of relying on BOS's own alphabetical-filename rule.
+`*_SWAP.ini` priority management - see below. It also ships two **read-only, beta** conflict
+scanners for two other systems with the same root cause (a later-processed file silently
+overwriting an earlier one): [SPID](#spid-conflicts-beta) Outfit/SleepOutfit/Skin distributions,
+and Skyrim's own [per-plugin ini overrides](#plugin-ini-conflicts-beta) (commonly used by grass/LOD
+mods). Both scanners only detect and report candidate conflicts for now - no winner-picking or
+file generation yet, unlike the BOS feature below.
 
 ## What it does
 
@@ -126,6 +132,39 @@ exclude decisions are GUI-only (saved to `INIPriority_decisions.json` in the out
 file the CLI reads); `--file-priority` is a fallback used only for conflicts with no saved
 decision - `*_SWAP.ini` filenames, comma-separated, lowest priority first.
 
+## SPID Conflicts (beta)
+
+[SPID](https://www.nexusmods.com/skyrimspecialedition/mods/36869) (Spell Perk Item Distributor,
+same author as BOS) has a similar alphabetical-load-order problem, but scoped to **Outfit**,
+**SleepOutfit**, and **Skin** distributions only (the "single slot per NPC" types): SPID loads
+`*_DISTR.ini` files alphabetically, and for these three types, a rule processed later silently
+overwrites an already-successful chance roll from a rule processed earlier. So if two mods each
+distribute a different Outfit to the same NPC with independent 50% chances, the NPC does **not**
+actually end up with a 50/50 split in-game - the later-loaded mod's roll can simply erase the
+earlier one's.
+
+Click **Scan SPID Conflicts (beta)** (or run with `--check-spid`) to get a read-only report of
+candidate conflicts: two entries are only flagged when their filters are **exactly** the same
+(the same NPC audience) - two different filters that could still overlap in practice (e.g. a Race
+filter and a Keyword that Race happens to carry) aren't detected by this version. Nothing here is
+editable yet; no winner is picked, no file is written.
+
+## Plugin INI Conflicts (beta)
+
+Skyrim itself (not a mod) auto-loads a `<PluginName>.esp.ini` file for any **active** plugin -
+commonly used by grass/LOD mods to tweak settings like `iMinGrassSize`. When two active plugins'
+inis set the same `[Section]` key to different values, the plugin that loads **last** wins (the
+same rule as ordinary record conflicts) - not alphabetical order like BOS or SPID.
+
+This scanner needs your real plugin load order to know who wins, which isn't derivable from
+`Data\` alone: point **Load Order File** at your `plugins.txt` (found in your MO2/Vortex profile,
+or `%LOCALAPPDATA%\Skyrim Special Edition\plugins.txt` for a vanilla-launcher setup), then click
+**Scan Plugin INI Conflicts (beta)** (or run with `--check-plugin-ini --load-order-file <path>`).
+Only genuine disagreements are shown - two plugins setting the same key to the *same* value isn't
+flagged, since nothing is actually wrong in that case. This mechanism is documented based on
+community sources (Bethesda's engine is closed-source), so results are only as good as the
+`plugins.txt` you provide. Read-only, same as the SPID scanner above.
+
 ## Building from source
 
 Requirements:
@@ -145,6 +184,8 @@ cmake --build buildRelease --config RelWithDebInfo
 - [PGPatcher](https://github.com/hakasapl/PGPatcher) by hakasapl (GPLv3).
 - [Base Object Swapper](https://www.nexusmods.com/skyrimspecialedition/mods/60805) by fenix31415 /
   powerof3, the SKSE plugin this tool manages ini priority for.
+- [Spell Perk Item Distributor](https://www.nexusmods.com/skyrimspecialedition/mods/36869) by
+  powerof3, the SKSE plugin the SPID Conflicts scanner reports on.
 - [CLI11](https://github.com/CLIUtils/CLI11), [spdlog](https://github.com/gabime/spdlog),
   [nlohmann/json](https://github.com/nlohmann/json), [wxWidgets](https://www.wxwidgets.org/).
 

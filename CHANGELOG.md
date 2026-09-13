@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+Renamed from BOSPriority to INIPriority - the app no longer manages only BOS.
+
+- **SPID Conflicts (beta)**: read-only scan of `*_DISTR.ini` files for cross-mod Outfit/
+  SleepOutfit/Skin conflicts (SPID's own alphabetical-load-order override problem). Detects
+  candidates by exact filter-signature match; no winner-picking or generation yet.
+- **Plugin INI Conflicts (beta)**: read-only scan of active plugins' own `<Plugin>.ini` override
+  files (Skyrim's built-in per-plugin ini system, commonly used by grass/LOD mods) for settings
+  two active plugins disagree on. Needs a new "Load Order File" (`plugins.txt`) input to know the
+  real plugin load order, since that isn't derivable from `Data\` alone.
+
 ## v1.0.0
 
 Initial release.
